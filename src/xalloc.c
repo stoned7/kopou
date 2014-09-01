@@ -58,7 +58,7 @@ void *xrealloc(void *ptr, size_t size)
 	old_size = malloc_usable_size(ptr);
 	new_ptr = realloc(ptr, size);
 
-	if (new_ptr)
+	if (new_ptr == NULL)
 		xalloc_oom_handler(size);
 
 	total_mem_used -= old_size;

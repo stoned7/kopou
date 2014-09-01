@@ -1,35 +1,32 @@
 #include "list.h"
-#include "xalloc.h"
 
-list_t *list_new(void (*del_element_handler)(void *data))
+list_t *list_new(rem_element_handler reh)
 {
-        list_t *new_list;
-        new_list = xmalloc(sizeof(*new_list));
-        new_list->size = 0;
-        new_list->head = NULL;
-        new_list->tail = NULL;
-        new_list->del_element_handler = del_element_handler;
-        return new_list;
+        list_t *list = xmalloc(sizeof(*list));
+        list->size = 0;
+        list->head = NULL;
+        list->tail = NULL;
+        list->erh = erh;
+        return list;
 }
 
 void list_del(list_t *list)
 {
         void *data;
         while (list_size(list) > 0) {
-		if (list_ele_del(list, list_tail(list), &data) == LIST_OK
-					&& list->del_element_handler != NULL)
-                        list->del_element_handler(data);
+		if (list_rem(list, list_tail(list), &data) == LIST_OK
+					&& list->erh != NULL)
+                        list->erh(data);
         }
         xfree(list);
 }
 
-int list_ele_add_next(list_t *list, list_element_t *element, const void *data)
+int list_add_next(list_t *list, list_element_t *element, const void *data)
 {
         if (element == NULL && list_size(list) != 0)
 		return LIST_ERR;
 
-        list_element_t *new_element;
-        new_element = xmalloc(sizeof(*new_element));
+        list_element_t *new_element = xmalloc(sizeof(*new_element));
         new_element->data = (void *)data;
 
         if (list_size(list) == 0) {
@@ -48,13 +45,12 @@ int list_ele_add_next(list_t *list, list_element_t *element, const void *data)
         return LIST_OK;
 }
 
-int list_ele_add_prev(list_t *list, list_element_t *element, const void *data)
+int list_add_prev(list_t *list, list_element_t *element, const void *data)
 {
         if (element == NULL && list_size(list) != 0)
 		return LIST_ERR;
 
-        list_element_t *new_element;
-        new_element = xmalloc(sizeof(*new_element));
+        list_element_t *new_element = xmalloc(sizeof(*new_element));
         new_element->data = (void *)data;
 
         if (list_size(list) == 0) {
@@ -73,7 +69,7 @@ int list_ele_add_prev(list_t *list, list_element_t *element, const void *data)
         return LIST_OK;
 }
 
-int list_ele_del(list_t *list, list_element_t *element, void **data)
+int list_rem(list_t *list, list_element_t *element, void **data)
 {
         if (element == NULL || list_size(list) == 0)
 		return LIST_ERR;

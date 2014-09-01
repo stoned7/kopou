@@ -4,8 +4,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "xalloc.h"
+
 #define LIST_OK 0
 #define LIST_ERR -1
+
+typedef void (*rem_element_handler)(void *data);
 
 typedef struct list_element {
         void *data;
@@ -17,20 +21,44 @@ typedef struct list {
         unsigned long size;
         list_element_t *head;
         list_element_t *tail;
-        void (*del_element_handler)(void *data);
+	rem_element_handler erh;
 } list_t;
 
-list_t *list_new(void (*del_element_handler)(void *data));
+list_t *list_new(rem_element_handler erh);
 void list_del(list_t *list);
-int list_ele_add_next(list_t *list, list_element_t *element, const void *data);
-int list_ele_add_prev(list_t *list, list_element_t *element, const void *data);
-int list_ele_del(list_t *list, list_element_t *element, void **data);
 
-#define list_size(list) ((list)->size)
-#define list_head(list) ((list)->head)
-#define list_tail(list) ((list)->tail)
-#define list_ele_data(element) ((element)->data)
-#define list_ele_next(element) ((element)->next)
-#define list_ele_prev(element) ((element)->prev)
+int list_add_next(list_t *list, list_element_t *element, const void *data);
+int list_add_prev(list_t *list, list_element_t *element, const void *data);
+int list_rem(list_t *list, list_element_t *element, void **data);
+
+static inline unsigned long list_size(list_t *list)
+{
+	return list->size;
+}
+
+static inline list_element_t *list_head(list_t *list)
+{
+	return list->head;
+}
+
+static inline list_element_t *list_tail(list_t *list)
+{
+	return list->tail;
+}
+
+static inline void* list_element_data(list_element_t *element)
+{
+	return element->data;
+}
+
+static inline list_element_t *list_element_next(list_element_t *element)
+{
+	return element->next;
+}
+
+static inline list_element_t *list_element_prev(list_element_t *element)
+{
+	return element->prev;
+}
 
 #endif

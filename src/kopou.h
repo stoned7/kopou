@@ -47,23 +47,19 @@ void klog(int level, const char *fmt, ...);
 #define REQ_NAME_LENGTH 5
 #define REMOTE_ADDR_LENGTH 16
 
-struct kopou_client;
+#define KOBJ_TYPE_STRING 0
+#define KOBJ_TYPE_BINARY 1
+#define KOBJ_ENCODING_KSTR 2
+#define KOBJ_ENCODING_RAW 3
 
-struct kopou_item {
+struct kclient;
+
+typedef struct kobj {
 	void *val;
 	size_t len;
-	kstr_t key;
-} kopou_item_t;
-
-struct arg {
-	union {
-		void *ptr;
-		char *str;
-	} data;
-	size_t len;
 	int type;
-};
-
+	int encoding;
+} kobj_t;
 
 struct req_blueprint {
 	char name[REQ_NAME_LENGTH];
@@ -72,18 +68,18 @@ struct req_blueprint {
 	int name_index;
 	int key_index;
 	int content_index;
-	void (*action)(struct kopou_client *client);
+	void (*action)(struct kclient *client);
 };
 
-struct kopou_client {
+struct kclient {
 	int fd;
 	char remoteaddr[REMOTE_ADDR_LENGTH];
 	int remoteport;
-	time_t creation_ts;
+	time_t created_ts;
 	time_t last_access_ts;
 	int expected_argc;
 	int argc;
-	struct arg **argv;
+	kobj_t **argv;
 	struct req_blueprint *blueprint;
 	int req_type;
 	int req_ready_to_process;

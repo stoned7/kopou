@@ -1,7 +1,7 @@
-#include "tcp.h"
 #include <stdio.h>
+#include "tcp.h"
 
-int tcp_create_listener(int port, int backlog, int nonblock)
+int tcp_create_listener(char* ip, int port, int nonblock)
 {
 	int sd, r;
 	socklen_t len;
@@ -24,14 +24,14 @@ int tcp_create_listener(int port, int backlog, int nonblock)
 	len = sizeof(saddr);
 	memset(&saddr, 0, len);
 	saddr.sin_family = AF_INET;
-	saddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	inet_pton(AF_INET, ip, &saddr.sin_addr);
 	saddr.sin_port = htons(port);
 
 	r = bind(sd, (struct sockaddr*)&saddr, len);
 	if (r == TCP_ERR)
 		goto err;
 
-	r = listen(sd, backlog);
+	r = listen(sd, TCP_CONN_BACKLOG);
 	if (r == TCP_ERR)
 		goto err;
 

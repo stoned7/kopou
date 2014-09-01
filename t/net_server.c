@@ -124,8 +124,7 @@ int main()
 {
 	xalloc_set_oom_handler(oom_handler);
 
-
-	listener = tcp_create_listener(7878, 1024, 1);
+	listener = tcp_create_listener("127.0.0.1", 7878, 1);
 	if (listener == TCP_ERR) {
 		klog(KOPOU_ERR, "listener creation fail");
 		return EXIT_FAILURE;

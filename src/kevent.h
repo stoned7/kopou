@@ -9,7 +9,7 @@
 #define KEVENT_ERR -1
 
 #define KEVENT_HINT 1024
-
+#define KKK 1
 enum {
 	KEVENT_FREE = (0x000),
 	KEVENT_READABLE = (0x001 << 0),
