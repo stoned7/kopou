@@ -52,6 +52,23 @@ void klog(int level, const char *fmt, ...);
 #define KOBJ_ENCODING_KSTR 2
 #define KOBJ_ENCODING_RAW 3
 
+#define CONFIG_LINE_LENGTH_MAX 1024
+
+struct settings {
+	kstr_t custer_name;
+	kstr_t address;
+	unsigned port;
+	int demonize;
+	int verbose;
+	kstr_t logdir;
+	kstr_t dbdir;
+	kstr_t workingdir;
+	unsigned max_concurrent_client;
+	unsigned client_idle_timeout;
+	int client_keepalive;
+};
+extern struct settings settings;
+
 struct kclient;
 
 typedef struct kobj {
