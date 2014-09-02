@@ -93,4 +93,6 @@ struct kclient {
 	size_t resbuff_write_pos;
 };
 
+void set_config_from_file(const kstr_t filename);
+
 #endif
