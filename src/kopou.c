@@ -11,7 +11,7 @@
 
 #define KOPOU_CLUSTER_SIZE 128
 
-struct settings settings;
+struct config_settings settings;
 
 struct node {
 	char *ip;

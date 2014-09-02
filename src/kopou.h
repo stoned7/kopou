@@ -54,7 +54,7 @@ void klog(int level, const char *fmt, ...);
 
 #define CONFIG_LINE_LENGTH_MAX 1024
 
-struct settings {
+struct config_settings {
 	kstr_t custer_name;
 	kstr_t address;
 	unsigned port;
@@ -67,7 +67,7 @@ struct settings {
 	unsigned client_idle_timeout;
 	int client_keepalive;
 };
-extern struct settings settings;
+extern struct config_settings settings;
 
 struct kclient;
 
