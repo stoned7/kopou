@@ -5,9 +5,19 @@
 #include <string.h>
 #include <time.h>
 #include "kstring.h"
+#include "xalloc.h"
+#include "aarray.h"
+#include "database.h"
+#include "list.h"
+#include "kevent.h"
+#include "tcp.h"
+
+#define K_OK 0
+#define K_ERR -1
+
+#define KOPOU_CRON_TIME 10
 
 #define VNODE_SIZE 0x080
-
 #define _vnode_state_size_slots (VNODE_SIZE >> 0x003)
 #define _vnode_state_slots(y) (y >> 0x003)
 #define _vnode_state_mask(y) (0x001 << (y & 0x007))
@@ -50,21 +60,42 @@ void klog(int level, const char *fmt, ...);
 
 #define CONFIG_LINE_LENGTH_MAX 1024
 
-struct config_settings {
-	kstr_t custer_name;
+#define KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS 1024
+#define KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT (2 * 60)
+
+struct kopou_settings {
+	kstr_t cluster_name;
 	kstr_t address;
 	int port;
+	int cport;
 	int mport;
 	int demonize;
 	int verbosity;
 	kstr_t logfile;
 	kstr_t dbdir;
+	kstr_t dbfile;
 	kstr_t workingdir;
 	int max_ccur_clients;
 	int client_idle_timeout;
 	int client_keepalive;
 };
-extern struct config_settings settings;
+
+
+struct kopou_server {
+	pid_t pid;
+	time_t current_time;
+};
+
+struct kopou_stats {
+	long long objects;
+	long long missed;
+	long long hits;
+	long long deleted;
+};
+
+extern struct kopou_server kopou;
+extern struct kopou_settings settings;
+extern struct kopou_stats stats;
 
 struct kclient;
 
@@ -107,6 +138,6 @@ struct kclient {
 	size_t resbuff_write_pos;
 };
 
-void set_config_from_file(const kstr_t filename);
+int set_config_from_file(const kstr_t filename);
 
 #endif

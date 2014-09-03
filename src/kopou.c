@@ -7,19 +7,42 @@
 #include <sys/types.h>
 
 #include "kopou.h"
-#include "xalloc.h"
 
-#define KOPOU_CLUSTER_SIZE 128
+struct kopou_server kopou;
+struct kopou_settings settings;
+struct kopou_stats stats;
 
-struct config_settings settings;
+void initialize_globals(void)
+{
+	kopou.pid = getpid();
+	time(&kopou.current_time);
 
-struct node {
-	char *ip;
-	int port;
-};
+	settings.cluster_name = kstr_new("kopou-dev");
+	settings.address = kstr_new("0.0.0.0");
+	settings.port = 7878;
+	settings.cport = 7879;
+	settings.mport = 7880;
+	settings.demonize = 0;
+	settings.verbosity = KOPOU_DEFAULT_VERBOSITY;
+	settings.logfile = kstr_new("./kopou-dev.log");
+	settings.dbdir = kstr_new(".");
+	settings.dbfile = kstr_new("./kopou-dev.kpu");
+	settings.max_ccur_clients = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
+	settings.client_idle_timeout = KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT;
+	settings.client_keepalive = 0;
 
-struct node cluster[KOPOU_CLUSTER_SIZE];
+	stats.objects = 0;
+	stats.hits = 0;
+	stats.missed = 0;
+	stats.deleted = 0;
+}
 
+void usages(void)
+{
+	fprintf(stdout, "%s\n", "\nUsages:\n\t./kopou <config-file>\n");
+	exit(EXIT_FAILURE);
+
+}
 
 void klog(int level, const char *fmt, ...)
 {
@@ -27,19 +50,16 @@ void klog(int level, const char *fmt, ...)
 	char msg[KOPOU_MAX_LOGMSG_LEN];
 	FILE *fp;
 
-	if (level < settings->verbosity)
+	if (level < settings.verbosity)
 		return;
 
 	va_start(params, fmt);
 	vsnprintf(msg, sizeof(msg), fmt, params);
 	va_end(params);
 
-	fp = settings->demonize ? stdout : fopen(settings->logfile, "a");
+	fp = !settings.demonize ? stdout : fopen(settings.logfile, "a");
 	if (!fp)
 		return;
-
-	pid_t pid;
-	pid = getpid();
 
 	char *levelstr[] = {"DEBUG", "INFO", "WARN", "ERR", "FATAL"};
 	time_t rawtime;
@@ -48,40 +68,30 @@ void klog(int level, const char *fmt, ...)
         time(&rawtime);
         timeinfo = localtime(&rawtime);
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
-	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], pid,  msg);
+	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], kopou.pid,  msg);
 	fflush(fp);
-	if (!settings->demonize)
+	if (!settings.demonize)
 		fclose(fp);
 }
 
-int main1(int argc, char **argv)
+int main(int argc, char **argv)
 {
-	klog(KOPOU_DEBUG, "starting server ...");
-	//_kdie("i am dieing %d", 2);
-	return 0;
+	int r;
 
-	vnodes_state_t bitarray;
-	int i;
-	printf("%d\n", _vnode_state_size_slots);
+	if (argc != 2)
+		usages();
+
+	if (!strncmp(argv[1],"--help", 6) || !strncmp(argv[1], "-h", 2))
+		usages();
+
+	initialize_globals();
+	if (set_config_from_file(argv[1]) == K_ERR)
+		_kdie("fail reading config '%s'", argv[1]);
 
 
-	vnode_state_add(bitarray, 55);
-	vnode_state_add(bitarray, 127);
-	vnode_state_add(bitarray, 77);
-	vnode_state_remove(bitarray, 55);
-	vnode_state_add(bitarray, 78);
-	vnode_state_add(bitarray, 89);
 
-	vnode_state_empty(bitarray);
-	for (i = 0; i < VNODE_SIZE; i++){
-		if (vnode_state_contain(bitarray, i))
-			printf("%d: test yes\n", i);
-	}
 
-	vnode_state_fill(bitarray);
-	for (i = 0; i < VNODE_SIZE; i++){
-		if (vnode_state_contain(bitarray, i))
-			printf("%d: test yes\n", i);
-	}
-	return 0;
+
+	klog(KOPOU_DEBUG, "starting kopou ...");
+	return EXIT_SUCCESS;
 }
