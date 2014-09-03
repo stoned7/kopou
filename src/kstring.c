@@ -27,6 +27,11 @@ void kstr_del(kstr_t str)
 	xfree(str - lsize);
 }
 
+kstr_t kstr_dup(kstr_t str)
+{
+	return _kstr_create(str, kstr_len(str));
+}
+
 int kstr_tok(kstr_t str, const char *deli, kstr_t **tokens)
 {
 	size_t len, delilen;

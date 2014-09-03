@@ -11,7 +11,7 @@
 
 #define KOPOU_CLUSTER_SIZE 128
 
-struct settings settings;
+struct config_settings settings;
 
 struct node {
 	char *ip;
@@ -27,14 +27,14 @@ void klog(int level, const char *fmt, ...)
 	char msg[KOPOU_MAX_LOGMSG_LEN];
 	FILE *fp;
 
-	if (level < KOPOU_LOG_VERVOSITY)
+	if (level < settings->verbosity)
 		return;
 
 	va_start(params, fmt);
 	vsnprintf(msg, sizeof(msg), fmt, params);
 	va_end(params);
 
-	fp = KOPOU_LOG_STDOUT ? stdout : fopen(KOPOU_LOG_FILE, "a");
+	fp = settings->demonize ? stdout : fopen(settings->logfile, "a");
 	if (!fp)
 		return;
 
@@ -50,7 +50,7 @@ void klog(int level, const char *fmt, ...)
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], pid,  msg);
 	fflush(fp);
-	if (!KOPOU_LOG_STDOUT)
+	if (!settings->demonize)
 		fclose(fp);
 }
 
