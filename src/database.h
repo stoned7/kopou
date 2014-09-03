@@ -2,10 +2,11 @@
 #define __DATABASE_H__
 
 #include "kopou.h"
+#include "aarray.h"
 
 struct _kopou_db {
-	kopou_ht_t *primary;
-	kopou_ht_t *secondary;
+	aarray_t *primary;
+	aarray_t *secondary;
 	long rehashpos;
 	int locked;
 } _kopou_db;

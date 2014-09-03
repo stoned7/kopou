@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "../lib/crc16.h"
+#include "../src/kopou.h"
 
 
 int main()
@@ -24,6 +25,30 @@ int main()
 	int j;
 	for (j = 0; j < 128; j++)
 		printf("cluster (%d): %d\n", j, cluster[j]);
+
+	vnodes_state_t bitarray;
+	int i;
+	printf("%d\n", _vnode_state_size_slots);
+
+
+	vnode_state_add(bitarray, 55);
+	vnode_state_add(bitarray, 127);
+	vnode_state_add(bitarray, 77);
+	vnode_state_remove(bitarray, 55);
+	vnode_state_add(bitarray, 78);
+	vnode_state_add(bitarray, 89);
+
+	vnode_state_empty(bitarray);
+	for (i = 0; i < VNODE_SIZE; i++){
+		if (vnode_state_contain(bitarray, i))
+			printf("%d: test yes\n", i);
+	}
+
+	vnode_state_fill(bitarray);
+	for (i = 0; i < VNODE_SIZE; i++){
+		if (vnode_state_contain(bitarray, i))
+			printf("%d: test yes\n", i);
+	}
 
 	return 0;
 }

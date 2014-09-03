@@ -84,15 +84,3 @@ int parse_req(char *data, int len)
 	}
 	return PARSE_OK;
 }
-
-
-int main()
-{
-	char *data = "~3\r\n#4$SINS\r\n#5$sujan";
-		//"\r\n#11$sujan dutta"
-		//"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa sujan dutta\r\n";
-	int len = strlen(data);
-	int result = parse_req(data, len);
-
-	return EXIT_SUCCESS;
-}

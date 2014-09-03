@@ -121,26 +121,3 @@ int kstr_toupper(kstr_t str)
 		str[i] = toupper(str[i]);
 	return 0;
 }
-
-#include <stdio.h>
-int main1()
-{
-	kstr_t str = kstr_new("hello\nhow are you\nI\nam\nfine");
-	kstr_t *tokens;
-
-	int count = kstr_tok(str, "\n", &tokens);
-	int i;
-
-	for (i = 0; i < count; i++) {
-		printf("%s:%d\n", tokens[i], kstr_len(tokens[i]));
-	}
-
-	kstr_t kstr = kstr_empty_new();
-	kstr_ncat_str(kstr, "sujan", 5);
-	printf("%s:%d\n", kstr, kstr_len(kstr));
-
-	kstr_ncat_str(kstr, " dutta", 6);
-	printf("%s:%d\n", kstr, kstr_len(kstr));
-
-	return 0;
-}
