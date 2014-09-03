@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include "kstring.h"
 #include "xalloc.h"
 
@@ -35,9 +36,9 @@ kstr_t kstr_dup(kstr_t str)
 int kstr_tok(kstr_t str, const char *deli, kstr_t **tokens)
 {
 	size_t len, delilen;
-	int ntoken = 0, i, j = 0;
+	size_t i, j = 0;
+	int ntoken = 0, ii;
         kstr_t *vector = NULL;
-	kstr_t *temp;
 
 	len = kstr_len(str);
 	delilen = strlen(deli);
@@ -66,8 +67,8 @@ int kstr_tok(kstr_t str, const char *deli, kstr_t **tokens)
 	*tokens = vector;
 	return ntoken;
 err:
-	for (i = 0; i < ntoken; i++)
-		kstr_del(vector[i]);
+	for (ii = 0; ii < ntoken; ii++)
+		kstr_del(vector[ii]);
 	xfree(vector);
         return 0;
 }
@@ -102,8 +103,7 @@ int kstr_cmp(const kstr_t str1, const kstr_t str2)
 
 int kstr_tolower(kstr_t str)
 {
-        size_t len;
-	int i;
+        size_t len, i;
 
 	len = kstr_len(str);
 	for (i = 0; i < len; i++)
@@ -113,8 +113,7 @@ int kstr_tolower(kstr_t str)
 
 int kstr_toupper(kstr_t str)
 {
-	size_t len;
-	int i;
+	size_t len, i;
 
 	len = kstr_len(str);
 	for (i = 0; i < len; i++)

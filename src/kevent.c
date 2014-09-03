@@ -4,7 +4,6 @@
 
 struct kevent_loop* kevent_new(int size, onprepoll onprepoll_handler)
 {
-	int i;
 	struct kevent_loop *el;
 	el = xmalloc(sizeof(*el));
 

@@ -50,7 +50,6 @@ int parse_req(char *data, int len)
 	}
 	data += 2;
 
-	int i;
 	for (i = 0; i < expected_argc; i++) {
 		argvlen = 0;
 		rollback = data;

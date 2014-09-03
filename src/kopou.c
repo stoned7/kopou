@@ -76,8 +76,6 @@ void klog(int level, const char *fmt, ...)
 
 int main(int argc, char **argv)
 {
-	int r;
-
 	if (argc != 2)
 		usages();
 
