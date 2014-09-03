@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#include "kopou.h"
 #include "kstring.h"
 #include "xalloc.h"
 

@@ -99,7 +99,7 @@ int tcp_set_keepalive(int sd, int interval)
 	if (val == 0)
 		val = 1;
 	r = setsockopt(sd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val));
-	if (r = TCP_ERR)
+	if (r == TCP_ERR)
 		return TCP_ERR;
 
 	val = 3;
@@ -130,7 +130,7 @@ ssize_t tcp_read(int sd, char *buf, size_t count, int *tryagain)
 {
 	ssize_t nread, tread = 0;
 	*tryagain = 0;
-	while (tread != count) {
+	while (tread != (ssize_t)count) {
 		nread = read(sd, buf, count - tread);
 		if (nread == 0)
 			return TCP_ERR; /* not interested for dead client */
@@ -151,7 +151,7 @@ ssize_t tcp_write(int sd, const char *buf, size_t count, int *tryagain)
 {
 	ssize_t nwritten, twritten = 0;
 	*tryagain = 0;
-	while (twritten != count) {
+	while (twritten != (ssize_t)count) {
 		nwritten = write(sd, buf, count - twritten);
 		if (nwritten == 0)
 			return twritten;

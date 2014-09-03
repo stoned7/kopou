@@ -6,7 +6,7 @@ list_t *list_new(rem_element_handler reh)
         list->size = 0;
         list->head = NULL;
         list->tail = NULL;
-        list->erh = erh;
+        list->reh = reh;
         return list;
 }
 
@@ -15,8 +15,8 @@ void list_del(list_t *list)
         void *data;
         while (list_size(list) > 0) {
 		if (list_rem(list, list_tail(list), &data) == LIST_OK
-					&& list->erh != NULL)
-                        list->erh(data);
+					&& list->reh != NULL)
+                        list->reh(data);
         }
         xfree(list);
 }

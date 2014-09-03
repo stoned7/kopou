@@ -21,10 +21,10 @@ typedef struct list {
         unsigned long size;
         list_element_t *head;
         list_element_t *tail;
-	rem_element_handler erh;
+	rem_element_handler reh;
 } list_t;
 
-list_t *list_new(rem_element_handler erh);
+list_t *list_new(rem_element_handler reh);
 void list_del(list_t *list);
 
 int list_add_next(list_t *list, list_element_t *element, const void *data);

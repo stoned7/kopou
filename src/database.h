@@ -1,8 +1,8 @@
 #ifndef __DATABASE_H__
 #define __DATABASE_H__
 
-#include "kopou.h"
 #include "aarray.h"
+#include "kopou.h"
 
 struct _kopou_db {
 	aarray_t *primary;
