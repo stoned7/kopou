@@ -21,17 +21,13 @@
 #define vnode_state_fill(x) (memset(x, 0x0ff, _vnode_state_size_slots))
 typedef unsigned char vnodes_state_t[_vnode_state_size_slots];
 
-#define KOPOU_LOG_STDOUT 1
-#define KOPOU_LOG_FILE "kopou.log"
 #define KOPOU_MAX_LOGMSG_LEN 256
-
 #define KOPOU_DEBUG 0
 #define KOPOU_INFO 1
 #define KOPOU_WARNING 2
 #define KOPOU_ERR 3
 #define _KOPOU_FATAL 4
 #define KOPOU_DEFAULT_VERBOSITY KOPOU_WARNING
-#define KOPOU_LOG_VERVOSITY KOPOU_DEBUG
 void klog(int level, const char *fmt, ...);
 #define _kdie(m, ...)\
 	do { klog(_KOPOU_FATAL,"[%s:%d:%s()]"m,__FILE__,__LINE__,__func__,##__VA_ARGS__);\
@@ -57,14 +53,15 @@ void klog(int level, const char *fmt, ...);
 struct config_settings {
 	kstr_t custer_name;
 	kstr_t address;
-	unsigned port;
+	int port;
+	int mport;
 	int demonize;
-	int verbose;
-	kstr_t logdir;
+	int verbosity;
+	kstr_t logfile;
 	kstr_t dbdir;
 	kstr_t workingdir;
-	unsigned max_concurrent_client;
-	unsigned client_idle_timeout;
+	int max_ccur_clients;
+	int client_idle_timeout;
 	int client_keepalive;
 };
 extern struct config_settings settings;
