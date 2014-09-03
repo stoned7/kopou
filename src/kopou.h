@@ -69,7 +69,7 @@ struct kopou_settings {
 	int port;
 	int cport;
 	int mport;
-	int demonize;
+	int background;
 	int verbosity;
 	kstr_t logfile;
 	kstr_t dbdir;
@@ -78,11 +78,13 @@ struct kopou_settings {
 	int max_ccur_clients;
 	int client_idle_timeout;
 	int client_keepalive;
+	kstr_t configfile;
 };
 
 
 struct kopou_server {
 	pid_t pid;
+	kstr_t pidfile;
 	time_t current_time;
 };
 

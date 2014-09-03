@@ -62,10 +62,10 @@ static void _config_from_line(kstr_t config)
 				err_msg = "management port out of range";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "demonize") && argc == 2) {
-			settings.demonize = _yesnotoi(argv[1]);
-			if (settings.demonize == -1) {
-				err_msg = "invalid demonize, yes or no only";
+		} else if (!strcmp(argv[0], "background") && argc == 2) {
+			settings.background = _yesnotoi(argv[1]);
+			if (settings.background == -1) {
+				err_msg = "invalid background, yes or no only";
 				goto err;
 			}
 		} else if (!strcmp(argv[0], "verbosity") && argc == 2) {
@@ -130,7 +130,7 @@ int set_config_from_file(const kstr_t filename)
 
 	fclose(configfile);
 	_config_from_line(config);
-	if (settings.demonize) {
+	if (settings.background) {
 		kstr_ncat_str(settings.logfile, "/",1);
 		kstr_ncat_str(settings.logfile, settings.cluster_name,
 				kstr_len(settings.cluster_name));

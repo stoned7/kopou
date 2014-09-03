@@ -16,13 +16,14 @@ void initialize_globals(void)
 {
 	kopou.pid = getpid();
 	time(&kopou.current_time);
+	kopou.pidfile = kstr_new("/tmp/kopou.pid");
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
 	settings.port = 7878;
 	settings.cport = 7879;
 	settings.mport = 7880;
-	settings.demonize = 0;
+	settings.background = 0;
 	settings.verbosity = KOPOU_DEFAULT_VERBOSITY;
 	settings.logfile = kstr_new("./kopou-dev.log");
 	settings.dbdir = kstr_new(".");
@@ -41,7 +42,6 @@ void usages(void)
 {
 	fprintf(stdout, "%s\n", "\nUsages:\n\t./kopou <config-file>\n");
 	exit(EXIT_FAILURE);
-
 }
 
 void klog(int level, const char *fmt, ...)
@@ -57,7 +57,7 @@ void klog(int level, const char *fmt, ...)
 	vsnprintf(msg, sizeof(msg), fmt, params);
 	va_end(params);
 
-	fp = !settings.demonize ? stdout : fopen(settings.logfile, "a");
+	fp = settings.background ? fopen(settings.logfile, "a") : stdout;
 	if (!fp)
 		return;
 
@@ -70,8 +70,38 @@ void klog(int level, const char *fmt, ...)
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], kopou.pid,  msg);
 	fflush(fp);
-	if (!settings.demonize)
+	if (settings.background)
 		fclose(fp);
+}
+
+void background(void)
+{
+	int fd;
+	FILE *fp;
+
+	if (fork() != 0)
+		exit(EXIT_SUCCESS);
+	setsid();
+
+	if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
+		dup2(fd, STDIN_FILENO);
+		dup2(fd, STDOUT_FILENO);
+		dup2(fd, STDERR_FILENO);
+		if (fd > STDERR_FILENO)
+			close(fd);
+	}
+
+	fp = fopen(kopou.pidfile,"w");
+	if (fp) {
+		fprintf(fp,"%d\n",(int)kopou.pid);
+		fclose(fp);
+	}
+}
+
+void stop(void)
+{
+	if (settings.background)
+		unlink(kopou.pidfile);
 }
 
 int main(int argc, char **argv)
@@ -85,11 +115,12 @@ int main(int argc, char **argv)
 	initialize_globals();
 	if (set_config_from_file(argv[1]) == K_ERR)
 		_kdie("fail reading config '%s'", argv[1]);
+	settings.configfile = kstr_new(argv[1]);
 
-
-
-
+	if (settings.background)
+		background();
 
 	klog(KOPOU_DEBUG, "starting kopou ...");
+	while(1);
 	return EXIT_SUCCESS;
 }
