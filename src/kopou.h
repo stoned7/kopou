@@ -86,6 +86,10 @@ struct kopou_server {
 	pid_t pid;
 	kstr_t pidfile;
 	time_t current_time;
+	int shutdown;
+	int listener;
+	int clistener;
+	int mlistener;
 };
 
 struct kopou_stats {

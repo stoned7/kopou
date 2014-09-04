@@ -62,12 +62,6 @@ static void _config_from_line(kstr_t config)
 				err_msg = "management port out of range";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "background") && argc == 2) {
-			settings.background = _yesnotoi(argv[1]);
-			if (settings.background == -1) {
-				err_msg = "invalid background, yes or no only";
-				goto err;
-			}
 		} else if (!strcmp(argv[0], "verbosity") && argc == 2) {
 			kstr_tolower(argv[1]);
 			if (!strcmp(argv[1], "debug"))
