@@ -150,6 +150,11 @@ static void kopou_signal_handler(int signal)
 
 static void stop(void)
 {
+	int i;
+	for (i = 0; i < kopou.nclients; i++) {
+		if (kopou.clients[i] && kopou.clients[i]->fd > 0)
+			tcp_close(kopou.clients[i]->fd);
+	}
 	tcp_close(kopou.listener);
 	if (settings.background)
 		unlink(kopou.pidfile);
@@ -191,13 +196,16 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
+	/* check cli req continue timeout/idle time 
+	 * clean them if required
+	 */
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
 {
 	K_FORCE_USE(ev);
-	klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
-	//if (eerrno != EINTR)
+	if (eerrno != EINTR)
+		klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
 	kopou.shutdown = 1;
 }
 
@@ -263,11 +271,10 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.clients = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
 							sizeof(kclient_t*));
+	klog(KOPOU_WARNING, "starting kopou ...");
 	if (initialize_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 
-
-	klog(KOPOU_WARNING, "starting kopou ...");
 	kevent_loop_start(kopou.loop);
 
 	stop();

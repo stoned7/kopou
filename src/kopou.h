@@ -57,7 +57,8 @@ void klog(int level, const char *fmt, ...);
 #define REQ_BUFFER_SIZE (16 * 1024)
 #define REQ_CONTENT_LENGTH_MAX (32 * (1024 * 1024))
 #define REQ_BUFFER_SIZE_MAX (2 * REQ_CONTENT_LENGTH_MAX)
-#define REQ_CONTINUE_IDLE_TIMEOUT (60 * 1000)
+#define REQ_CONTINUE_IDLE_TIMEOUT (60)
+#define KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT (5 * 60)
 
 #define REQ_NAME_LENGTH 5
 
@@ -70,7 +71,6 @@ void klog(int level, const char *fmt, ...);
 
 #define KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS 1024
 #define KOPOU_OWN_FDS (32 + VNODE_SIZE)
-#define KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT (2 * 60)
 #define KOPOU_TCP_KEEPALIVE 100
 
 enum {
@@ -110,7 +110,7 @@ struct kopou_server {
 	int mlistener;
 
 	int nclients;
-	struct kclient *clients;
+	struct kclient **clients;
 	struct kclient *curr_client;
 };
 
@@ -144,20 +144,24 @@ typedef struct kclient {
 	kstr_t remoteaddr;
 	time_t created_ts;
 	time_t last_access_ts;
+
 	int expected_argc;
 	int argc;
 	kobj_t **argv;
+
 	struct req_blueprint *blueprint;
 	int req_type;
 	int req_ready_to_process;
+
 	size_t req_parsing_pos;
-	time_t req_parsing_start_ts;
-	size_t reqbuff_len;
-	char *reqbuff;
-	size_t reqbuff_read_pos;
-	size_t resbuff_len;
-	char *resbuff;
-	size_t resbuff_write_pos;
+	size_t reqbuf_len;
+	list_t *reqbuf;
+	size_t reqbuf_read_len;
+
+	size_t resbuf_len;
+	void *resbuf;
+	size_t resbuf_writen_pos;
+
 	int disconnect_asap;
 	int disconnect_after_write;
 } kclient_t;
