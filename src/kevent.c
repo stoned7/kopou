@@ -69,7 +69,8 @@ static int _poll(struct kevent_loop *el)
 	nev = epoll_wait(el->epd, el->events, el->event_size,
 						KEVENT_POLL_TIMEOUT);
 	if (nev == KEVENT_ERR) {
-		el->stop_asap = 1;
+		if (errno != EINTR)
+			el->stop_asap = 1;
 		return KEVENT_ERR;
 	}
 
