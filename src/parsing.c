@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "kopou.h"
+
 #define CR '\r'
 #define NF '\n'
 
@@ -21,11 +23,7 @@
 #define PARSE_ERR -1
 #define PARSE_CONT 1
 
-enum {
-	KOPOU_REQ_TYPE_NONE = 0,
-	KOPOU_REQ_TYPE_NORMAL,
-	KOPOU_REQ_TYPE_REPLICA,
-};
+
 
 int parse_req(char *data, int len)
 {
@@ -33,6 +31,9 @@ int parse_req(char *data, int len)
 	int expected_argc = 0;
 	int i, argvlen, actual_argvlen;
 	char *end, *rollback;
+
+	K_FORCE_USE(req_type);
+	K_FORCE_USE(len);
 
 	if (data[0] == REQ_NORMAL)
 		req_type = KOPOU_REQ_TYPE_NORMAL;
