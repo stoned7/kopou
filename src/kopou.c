@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <stdarg.h>
 
 #include "kopou.h"
 
@@ -20,8 +20,11 @@ static void initialize_globals(int bg)
 	kopou.pidfile = kstr_new("/tmp/kopou.pid");
 	kopou.shutdown = 0;
 	kopou.listener = -1;
+	kopou.loop = NULL;
 	kopou.clistener = -1;
 	kopou.mlistener = -1;
+	kopou.nclients = 0;
+	kopou.curr_client = NULL;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -43,10 +46,26 @@ static void initialize_globals(int bg)
 	stats.deleted = 0;
 }
 
-static void usages(void)
+static void kopou_oom_handler(size_t size)
 {
-	fprintf(stdout, "%s\n", "\nUsages:\n\tkopou <config-file> [--daemonize]\n\tkopou --help\n");
-	exit(EXIT_FAILURE);
+	_kdie("out of memory, total memory used: %lu bytes"
+		"and fail to alloc:%lu bytes", xalloc_total_mem_used(), size);
+}
+
+
+static void usages(char *name)
+{
+	fprintf(stdout, "\nUsages:\n\t%s <config-file> [--background[-b]]\n", name);
+	fprintf(stdout, "\t%s --help[-h]\n", name);
+	fprintf(stdout, "\t%s --version[-v]\n\n", name);
+	exit(EXIT_SUCCESS);
+}
+
+static void version(void)
+{
+	fprintf(stdout, "\nkopou v%s %d bits, +cluster[%d vnodes]\n\n",
+			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
+	exit(EXIT_SUCCESS);
 }
 
 void klog(int level, const char *fmt, ...)
@@ -131,10 +150,10 @@ static void kopou_signal_handler(int signal)
 
 static void stop(void)
 {
-	klog(KOPOU_WARNING, "shutting down kopou");
+	tcp_close(kopou.listener);
 	if (settings.background)
 		unlink(kopou.pidfile);
-	exit(EXIT_SUCCESS);
+	/* signal db worker to finish job */
 }
 
 static int setup_sighandler_asyncworkers(void)
@@ -168,17 +187,66 @@ static int setup_sighandler_asyncworkers(void)
 	return K_OK;
 }
 
+static void loop_prepoll_handler(kevent_loop_t *ev)
+{
+	if (kopou.shutdown)
+		kevent_loop_stop(ev);
+}
+
+static void loop_error_handler(kevent_loop_t *ev, int eerrno)
+{
+	K_FORCE_USE(ev);
+	klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
+	//if (eerrno != EINTR)
+	kopou.shutdown = 1;
+}
+
+static int initialize_kopou_listener(void)
+{
+	kopou.listener = tcp_create_listener(settings.address, settings.port,
+			KOPOU_TCP_NONBLOCK);
+	if (kopou.listener == TCP_ERR) {
+		klog(KOPOU_ERR, "fail creating listener %s:%d", settings.address,
+				settings.port);
+		return K_ERR;
+	}
+
+	kopou.loop = kevent_new(settings.max_ccur_clients + KOPOU_OWN_FDS,
+				loop_prepoll_handler, loop_error_handler);
+	if (!kopou.loop) {
+		klog(KOPOU_ERR, "fail creating main loop");
+		return K_ERR;
+	}
+
+	if (kevent_add_event(kopou.loop, kopou.listener, KEVENT_READABLE,
+			kopou_accept_new_connection, NULL,
+			kopou_listener_error) == KEVENT_ERR) {
+		klog(KOPOU_ERR, "fail registering listener to loop");
+		return K_ERR;
+	}
+	return K_OK;
+}
+
+
 int main(int argc, char **argv)
 {
 	if (argc != 2)
 		if (argc != 3)
-			usages();
-	if (argc == 2)
-		if (!strncmp(argv[1],"--help", 6))
-			usages();
+			usages(argv[0]);
+
+	if (argc == 2) {
+		if (!strcmp(argv[1],"--help")
+				|| !strcmp(argv[1], "-h"))
+			usages(argv[0]);
+		else if (!strcmp(argv[1], "--version")
+				|| !strcmp(argv[1], "-v"))
+			version();
+	}
+
 	if (argc == 3)
-		if (strncmp(argv[2], "--daemonize", 11))
-			usages();
+		if (strcmp(argv[2], "--background"))
+			if (strcmp(argv[2], "-b"))
+				usages(argv[0]);
 
 	initialize_globals(argc == 3);
 	if (set_config_from_file(argv[1]) == K_ERR)
@@ -191,10 +259,19 @@ int main(int argc, char **argv)
 	if (setup_sighandler_asyncworkers() == K_ERR)
 		_kdie("fail to setup signal handlers");
 
-	klog(KOPOU_DEBUG, "starting kopou ...");
-	while(1) {
-		if (kopou.shutdown)
-			stop();
-	};
+
+	xalloc_set_oom_handler(kopou_oom_handler);
+	kopou.clients = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
+							sizeof(kclient_t*));
+	if (initialize_kopou_listener() == K_ERR)
+		_kdie("fail to start listener");
+
+
+	klog(KOPOU_WARNING, "starting kopou ...");
+	kevent_loop_start(kopou.loop);
+
+	stop();
+	kevent_del(kopou.loop);
+	klog(KOPOU_WARNING, "stoping kopou ...");
 	return EXIT_SUCCESS;
 }

@@ -4,8 +4,8 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "xalloc.h"
 #include "kopou.h"
+#include "xalloc.h"
 
 static int config_tok_line(const char *line, kstr_t **argv);
 

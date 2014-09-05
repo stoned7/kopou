@@ -4,6 +4,8 @@
 #include <limits.h>
 #include <string.h>
 #include <time.h>
+#include <stdarg.h>
+
 #include "kstring.h"
 #include "xalloc.h"
 #include "aarray.h"
@@ -14,8 +16,15 @@
 
 #define K_OK 0
 #define K_ERR -1
+#define K_FORCE_USE(v) ((void)v)
 
-#define KOPOU_CRON_TIME 10
+#define KOPOU_VERSION ".09"
+#define KOPOU_ARCHITECTURE ((sizeof(long) == 8) ? 64 : 32)
+#define KOPOU_TCP_NONBLOCK 1
+#define KOPOU_MAX_ACCEPT_CONN 1024
+
+#define ADDRESS_LENGTH 17
+#define KOPOU_CRON_TIME 100
 
 #define VNODE_SIZE 0x080
 #define _vnode_state_size_slots (VNODE_SIZE >> 0x003)
@@ -51,7 +60,6 @@ void klog(int level, const char *fmt, ...);
 #define REQ_CONTINUE_IDLE_TIMEOUT (60 * 1000)
 
 #define REQ_NAME_LENGTH 5
-#define REMOTE_ADDR_LENGTH 16
 
 #define KOBJ_TYPE_STRING 0
 #define KOBJ_TYPE_BINARY 1
@@ -61,7 +69,15 @@ void klog(int level, const char *fmt, ...);
 #define CONFIG_LINE_LENGTH_MAX 1024
 
 #define KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS 1024
+#define KOPOU_OWN_FDS (32 + VNODE_SIZE)
 #define KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT (2 * 60)
+#define KOPOU_TCP_KEEPALIVE 100
+
+enum {
+	KOPOU_REQ_TYPE_NONE = 0,
+	KOPOU_REQ_TYPE_NORMAL,
+	KOPOU_REQ_TYPE_REPLICA,
+};
 
 struct kopou_settings {
 	kstr_t cluster_name;
@@ -81,6 +97,7 @@ struct kopou_settings {
 	kstr_t configfile;
 };
 
+struct kclient; /* forward declaration */
 
 struct kopou_server {
 	pid_t pid;
@@ -88,8 +105,13 @@ struct kopou_server {
 	time_t current_time;
 	int shutdown;
 	int listener;
+	kevent_loop_t *loop;
 	int clistener;
 	int mlistener;
+
+	int nclients;
+	struct kclient *clients;
+	struct kclient *curr_client;
 };
 
 struct kopou_stats {
@@ -99,11 +121,6 @@ struct kopou_stats {
 	long long deleted;
 };
 
-extern struct kopou_server kopou;
-extern struct kopou_settings settings;
-extern struct kopou_stats stats;
-
-struct kclient;
 
 typedef struct kobj {
 	void *val;
@@ -122,10 +139,9 @@ struct req_blueprint {
 	void (*action)(struct kclient *client);
 };
 
-struct kclient {
+typedef struct kclient {
 	int fd;
-	char remoteaddr[REMOTE_ADDR_LENGTH];
-	int remoteport;
+	kstr_t remoteaddr;
 	time_t created_ts;
 	time_t last_access_ts;
 	int expected_argc;
@@ -142,8 +158,20 @@ struct kclient {
 	size_t resbuff_len;
 	char *resbuff;
 	size_t resbuff_write_pos;
-};
+	int disconnect_asap;
+	int disconnect_after_write;
+} kclient_t;
 
+extern struct kopou_server kopou;
+extern struct kopou_settings settings;
+extern struct kopou_stats stats;
+
+/* settings.c */
 int set_config_from_file(const kstr_t filename);
+
+/* networks.c */
+void kopou_accept_new_connection(int fd, eventtype_t evtype);
+void kopou_listener_error(int fd, eventtype_t evtype);
+
 
 #endif
