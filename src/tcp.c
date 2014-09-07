@@ -133,7 +133,7 @@ ssize_t tcp_read(int sd, char *buf, size_t count, int *tryagain)
 	while (tread != (ssize_t)count) {
 		nread = read(sd, buf, count - tread);
 		if (nread == 0)
-			return TCP_ERR; /* not interested for dead client */
+			return TCP_ERR;
 		if (nread == TCP_ERR) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
 				*tryagain = 1;

@@ -25,6 +25,8 @@ static void initialize_globals(int bg)
 	kopou.mlistener = -1;
 	kopou.nclients = 0;
 	kopou.curr_client = NULL;
+	kopou.bestmemory = 0;
+	kopou.exceedbestmemory = 0;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -37,8 +39,9 @@ static void initialize_globals(int bg)
 	settings.dbdir = kstr_new(".");
 	settings.dbfile = kstr_new("./kopou-dev.kpu");
 	settings.max_ccur_clients = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
-	settings.client_idle_timeout = KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT;
+	settings.client_keepalive_timeout = KOPOU_CLIENT_KEEPALIVE_TIMEOUT;
 	settings.client_keepalive = 0;
+	settings.client_tcpkeepalive = 0;
 
 	stats.objects = 0;
 	stats.hits = 0;
@@ -150,6 +153,11 @@ static void kopou_signal_handler(int signal)
 
 static void stop(void)
 {
+	int i;
+	for (i = 0; i < kopou.nclients; i++) {
+		if (kopou.clients[i] && kopou.clients[i]->fd > 0)
+			tcp_close(kopou.clients[i]->fd);
+	}
 	tcp_close(kopou.listener);
 	if (settings.background)
 		unlink(kopou.pidfile);
@@ -191,13 +199,16 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
+	/* check cli req continue timeout/idle time 
+	 * clean them if required
+	 */
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
 {
 	K_FORCE_USE(ev);
-	klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
-	//if (eerrno != EINTR)
+	if (eerrno != EINTR)
+		klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
 	kopou.shutdown = 1;
 }
 
@@ -263,11 +274,10 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.clients = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
 							sizeof(kclient_t*));
+	klog(KOPOU_WARNING, "starting kopou ...");
 	if (initialize_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 
-
-	klog(KOPOU_WARNING, "starting kopou ...");
 	kevent_loop_start(kopou.loop);
 
 	stop();

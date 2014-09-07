@@ -84,12 +84,19 @@ static void _config_from_line(kstr_t config)
 			settings.workingdir = kstr_dup(argv[1]);
 		} else if (!strcmp(argv[0], "max_concurrent_clients") && argc == 2) {
 			settings.max_ccur_clients = atoi(argv[1]);
-		} else if (!strcmp(argv[0], "client_idle_timeout") && argc == 2) {
-			settings.client_idle_timeout = atoi(argv[1]);
+		} else if (!strcmp(argv[0], "client_keepalive_timeout") && argc == 2) {
+			int to = atoi(argv[1]);
+			settings.client_keepalive_timeout = (to * (60 * 60));
 		} else if (!strcmp(argv[0], "client_keepalive") && argc == 2) {
 			settings.client_keepalive = _yesnotoi(argv[1]);
 			if (settings.client_keepalive == -1) {
-				err_msg = "invalid keepalive, yes or no only";
+				err_msg = "invalid client keepalive, yes or no only";
+				goto err;
+			}
+		} else if (!strcmp(argv[0], "client_tcpkeepalive") && argc == 2) {
+			settings.client_tcpkeepalive = _yesnotoi(argv[1]);
+			if (settings.client_tcpkeepalive == -1) {
+				err_msg = "invalid tcp keepalive, yes or no only";
 				goto err;
 			}
 		}

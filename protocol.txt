@@ -34,8 +34,6 @@ response:
 #11$keyNotFound\r\n
 
 
-
-
 ~3\r\n#4$SINS\r\n#8$sibsagar\r\n#21$Hey, I am from Assam.\r\n
 ^3\r\n#4$SINS\r\n#8$sibsagar\r\n#21$Hey, I am from Assam.\r\n
 ~2\r\n#4$SGET\r\n#10$abcdefghij\r\n
