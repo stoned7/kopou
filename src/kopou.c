@@ -25,6 +25,8 @@ static void initialize_globals(int bg)
 	kopou.mlistener = -1;
 	kopou.nclients = 0;
 	kopou.curr_client = NULL;
+	kopou.bestmemory = 0;
+	kopou.exceedbestmemory = 0;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -37,8 +39,9 @@ static void initialize_globals(int bg)
 	settings.dbdir = kstr_new(".");
 	settings.dbfile = kstr_new("./kopou-dev.kpu");
 	settings.max_ccur_clients = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
-	settings.client_idle_timeout = KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT;
+	settings.client_keepalive_timeout = KOPOU_CLIENT_KEEPALIVE_TIMEOUT;
 	settings.client_keepalive = 0;
+	settings.client_tcpkeepalive = 0;
 
 	stats.objects = 0;
 	stats.hits = 0;

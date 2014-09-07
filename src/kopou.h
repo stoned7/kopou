@@ -55,10 +55,12 @@ void klog(int level, const char *fmt, ...);
 
 #define KOPOU_KEY_MAX_SIZE (256)
 #define REQ_BUFFER_SIZE (16 * 1024)
-#define REQ_CONTENT_LENGTH_MAX (32 * (1024 * 1024))
-#define REQ_BUFFER_SIZE_MAX (2 * REQ_CONTENT_LENGTH_MAX)
+#define REQ_CONTENT_LENGTH_MAX (64 * (1024 * 1024))
+#define REQ_BUFFER_SIZE_MAX (2048 + REQ_CONTENT_LENGTH_MAX)
+#define RES_WRITTEN_SIZE_MAX (16 * (1024 * 1024))
+
 #define REQ_CONTINUE_IDLE_TIMEOUT (60)
-#define KOPOU_DEFAULT_CLIENT_IDLE_TIMEOUT (5 * 60)
+#define KOPOU_CLIENT_KEEPALIVE_TIMEOUT (10 * (60 * 60))
 
 #define REQ_NAME_LENGTH 5
 
@@ -74,9 +76,15 @@ void klog(int level, const char *fmt, ...);
 #define KOPOU_TCP_KEEPALIVE 100
 
 enum {
+	KOPOU_CLIENT_TYPE_NORMAL = 0,
+	KOPOU_CLIENT_TYPE_INTERNAL,
+};
+
+enum {
 	KOPOU_REQ_TYPE_NONE = 0,
 	KOPOU_REQ_TYPE_NORMAL,
 	KOPOU_REQ_TYPE_REPLICA,
+	KOPOU_REQ_TYPE_BIN,
 };
 
 struct kopou_settings {
@@ -92,8 +100,9 @@ struct kopou_settings {
 	kstr_t dbfile;
 	kstr_t workingdir;
 	int max_ccur_clients;
-	int client_idle_timeout;
+	int client_tcpkeepalive;
 	int client_keepalive;
+	int client_keepalive_timeout;
 	kstr_t configfile;
 };
 
@@ -108,7 +117,8 @@ struct kopou_server {
 	kevent_loop_t *loop;
 	int clistener;
 	int mlistener;
-
+	size_t bestmemory;
+	int exceedbestmemory;
 	int nclients;
 	struct kclient **clients;
 	struct kclient *curr_client;
@@ -141,6 +151,8 @@ struct req_blueprint {
 
 typedef struct kclient {
 	int fd;
+	int type;
+
 	kstr_t remoteaddr;
 	time_t created_ts;
 	time_t last_access_ts;
@@ -160,9 +172,8 @@ typedef struct kclient {
 
 	size_t resbuf_len;
 	void *resbuf;
-	size_t resbuf_writen_pos;
+	size_t resbuf_written_pos;
 
-	int disconnect_asap;
 	int disconnect_after_write;
 } kclient_t;
 
