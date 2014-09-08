@@ -9,7 +9,6 @@
 #include "kstring.h"
 #include "xalloc.h"
 #include "aarray.h"
-#include "database.h"
 #include "list.h"
 #include "kevent.h"
 #include "tcp.h"
@@ -66,14 +65,27 @@ void klog(int level, const char *fmt, ...);
 
 #define KOBJ_TYPE_STRING 0
 #define KOBJ_TYPE_BINARY 1
-#define KOBJ_ENCODING_KSTR 2
-#define KOBJ_ENCODING_RAW 3
+#define KOBJ_TYPE_KSTR 2
 
 #define CONFIG_LINE_LENGTH_MAX 1024
 
 #define KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS 1024
 #define KOPOU_OWN_FDS (32 + VNODE_SIZE)
 #define KOPOU_TCP_KEEPALIVE 100
+
+#define CR '\r'
+#define NF '\n'
+#define BEGIN_PARAM_LEN '#'
+#define BEGIN_PARAM_VALUE '$'
+#define END_DELIMITER "\r\n"
+#define REQ_NORMAL '~'
+#define REQ_REPLICA '^'
+#define RES_SUCCESS '+'
+#define RES_FAIL '-'
+#define RES_REDIRECT '>'
+#define PARSE_OK 0
+#define PARSE_ERR -1
+
 
 enum {
 	KOPOU_CLIENT_TYPE_NORMAL = 0,
@@ -85,6 +97,7 @@ enum {
 	KOPOU_REQ_TYPE_NORMAL,
 	KOPOU_REQ_TYPE_REPLICA,
 	KOPOU_REQ_TYPE_BIN,
+	KOPOU_REQ_TYPE_HTTP,
 };
 
 struct kopou_settings {
@@ -136,16 +149,14 @@ typedef struct kobj {
 	void *val;
 	size_t len;
 	int type;
-	int encoding;
 } kobj_t;
 
 struct req_blueprint {
-	char name[REQ_NAME_LENGTH];
+	kstr_t name;
 	int readonly;
 	int argc;
-	int name_index;
-	int key_index;
-	int content_index;
+	int kindex;
+	int cindex;
 	void (*action)(struct kclient *client);
 };
 
@@ -164,10 +175,9 @@ typedef struct kclient {
 	struct req_blueprint *blueprint;
 	int req_type;
 	int req_ready_to_process;
-
 	size_t req_parsing_pos;
 	size_t reqbuf_len;
-	list_t *reqbuf;
+	char *reqbuf;
 	size_t reqbuf_read_len;
 
 	size_t resbuf_len;
@@ -188,5 +198,19 @@ int set_config_from_file(const kstr_t filename);
 void kopou_accept_new_connection(int fd, eventtype_t evtype);
 void kopou_listener_error(int fd, eventtype_t evtype);
 
+/* parsing.c */
+int parse_req(kclient_t *c);
+
+/* reply.c */
+void reply_err(kclient_t *c);
+void reply_err_protocol(kclient_t *c);
+void reply_err_notfound(kclient_t *c);
+void reply_err_unknownreq(kclient_t *c);
+void reply_ok(kclient_t *c);
+void reply_ok_redirect(kclient_t *c);
+void reply_ok_write(kclient_t *c);
+void reply_ok_write_redirect(kclient_t *c);
+
+struct req_blueprint *get_req_blueprint(kobj_t *o);
 
 #endif
