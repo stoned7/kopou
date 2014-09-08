@@ -66,7 +66,7 @@ static void usages(char *name)
 
 static void version(void)
 {
-	fprintf(stdout, "\nkopou v%s %d bits, +cluster[%d vnodes]\n\n",
+	fprintf(stdout, "\nkopou-server v%s %d bits, +cluster[%d vnodes]\n\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 	exit(EXIT_SUCCESS);
 }

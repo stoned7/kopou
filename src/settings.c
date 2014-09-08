@@ -46,54 +46,58 @@ static void _config_from_line(kstr_t config)
 
 		kstr_tolower(argv[0]);
 
-		if (!strcmp(argv[0], "cluster") && argc == 2) {
+		if (!strcasecmp(argv[0], "cluster") && argc == 2) {
                         settings.cluster_name = kstr_dup(argv[1]);
-                } else if (!strcmp(argv[0], "address") && argc == 2) {
+                } else if (!strcasecmp(argv[0], "address") && argc == 2) {
 			settings.address = kstr_dup(argv[1]);
-		} else if (!strcmp(argv[0], "port") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "port") && argc == 2) {
 			settings.port = atoi(argv[1]);
 			if (settings.port < 1024 || settings.port > 65535) {
 				err_msg = "port out of range";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "management_port") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "management_port") && argc == 2) {
 			settings.mport = atoi(argv[1]);
 			if (settings.mport < 1024 || settings.mport > 65535) {
 				err_msg = "management port out of range";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "verbosity") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "verbosity") && argc == 2) {
 			kstr_tolower(argv[1]);
-			if (!strcmp(argv[1], "debug"))
+			if (!strcasecmp(argv[1], "debug"))
 				settings.verbosity = KOPOU_DEBUG;
-			else if (!strcmp(argv[1], "info"))
+			else if (!strcasecmp(argv[1], "info"))
 				settings.verbosity = KOPOU_INFO;
-			else if (!strcmp(argv[1], "warning"))
+			else if (!strcasecmp(argv[1], "warning"))
 				settings.verbosity = KOPOU_WARNING;
-			else if (!strcmp(argv[1], "error"))
+			else if (!strcasecmp(argv[1], "error"))
 				settings.verbosity = KOPOU_ERR;
 			else {
 				err_msg = "invalid log verbosity";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "log_dir") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "log_dir") && argc == 2) {
 			settings.logfile = kstr_dup(argv[1]);
-		} else if (!strcmp(argv[0], "db_dir") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "db_dir") && argc == 2) {
 			settings.dbdir = kstr_dup(argv[1]);
-		} else if (!strcmp(argv[0], "working_dir") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "working_dir") && argc == 2) {
 			settings.workingdir = kstr_dup(argv[1]);
-		} else if (!strcmp(argv[0], "max_concurrent_clients") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "max_concurrent_clients")
+								&& argc == 2) {
 			settings.max_ccur_clients = atoi(argv[1]);
-		} else if (!strcmp(argv[0], "client_keepalive_timeout") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "client_keepalive_timeout")
+								&& argc == 2) {
 			int to = atoi(argv[1]);
 			settings.client_keepalive_timeout = (to * (60 * 60));
-		} else if (!strcmp(argv[0], "client_keepalive") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "client_keepalive")
+								 && argc == 2) {
 			settings.client_keepalive = _yesnotoi(argv[1]);
 			if (settings.client_keepalive == -1) {
 				err_msg = "invalid client keepalive, yes or no only";
 				goto err;
 			}
-		} else if (!strcmp(argv[0], "client_tcpkeepalive") && argc == 2) {
+		} else if (!strcasecmp(argv[0], "client_tcpkeepalive")
+								&& argc == 2) {
 			settings.client_tcpkeepalive = _yesnotoi(argv[1]);
 			if (settings.client_tcpkeepalive == -1) {
 				err_msg = "invalid tcp keepalive, yes or no only";
