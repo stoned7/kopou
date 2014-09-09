@@ -1,3 +1,8 @@
+/* Added new API
+   "sujan dutta" <sujandutta@gmail.com>
+*/
+
+
 #ifndef __CRC16_H__
 #define __CRC16_H__
 
