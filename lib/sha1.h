@@ -6,7 +6,8 @@ By Steve Reid <steve@edmweb.com>
 */
 
 /* Continue 100% Public Domain
-   Add new api by sujandutta@gmail.com
+   Added new API
+   "sujan dutta" <sujandutta@gmail.com>
 */
 
 #ifndef __SHA1_H__
