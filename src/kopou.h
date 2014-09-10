@@ -175,6 +175,7 @@ typedef struct kclient {
 	struct req_blueprint *blueprint;
 	int req_type;
 	int req_ready_to_process;
+
 	size_t req_parsing_pos;
 	size_t reqbuf_len;
 	char *reqbuf;
