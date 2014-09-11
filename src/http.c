@@ -118,9 +118,9 @@ typedef struct {
 	kstr_t *uriv;
 
 	int method;
-	int version;
-	int keep_alive;
-	int keep_alive_timeout;
+	int connection_keep_alive;
+	int connection_close;
+	int connection_keep_alive_timeout;
 
 	kstr_t host;
 	unsigned port;
@@ -144,7 +144,6 @@ typedef struct {
 	u_char *request_start;
 	u_char *request_end;
 	u_char *method_end;
-	u_char *uri_start;
 	u_char *schema_start;
 	u_char *schema_end;
 	u_char *host_start;
@@ -152,10 +151,11 @@ typedef struct {
 	u_char *port_end;
 	u_char *uri_start;
 	u_char *uri_end;
+	u_char *uri_ext;
 	u_char *args_start;
 	u_char *args_end;
-	u_char *version_start;
-	u_char *version_end;
+	int major_version;
+	int minor_version;
 
 	unsigned complex_uri:1;
 	unsigned quoted_uri:1;
