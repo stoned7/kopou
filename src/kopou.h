@@ -148,7 +148,8 @@ struct kopou_stats {
 typedef struct kobj {
 	void *val;
 	size_t len;
-	int type;
+	unsigned type:4;
+	unsigned encoding:4;
 } kobj_t;
 
 struct req_blueprint {

@@ -4,7 +4,7 @@
 
 #define KSTR_EOS '\0'
 
-static kstr_t _kstr_create(char *str, size_t len)
+kstr_t _kstr_create(char *str, size_t len)
 {
 	kstr_t kstr = xmalloc(lsize + len + 1);
 	memcpy(kstr, &len, lsize);
