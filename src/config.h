@@ -4,7 +4,7 @@
 #if defined(linux)
 #elif defined(__linux__)
 #else
-#error "flute supports only linux"
+#error "currently kopou supports only LINUX"
 #endif
 
 #include <sys/types.h>

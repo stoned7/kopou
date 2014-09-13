@@ -119,7 +119,6 @@ void listener_accept_handler(int fd, void *privatedata)
 	}
 }
 
-
 int main()
 {
 	xalloc_set_oom_handler(oom_handler);

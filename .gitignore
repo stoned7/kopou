@@ -1,2 +1,5 @@
 *.o
+*.log
+*.kpu
+kopou
 tags

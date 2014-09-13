@@ -1,23 +1,75 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <signal.h>
+#include <stdarg.h>
 
 #include "kopou.h"
-#include "xalloc.h"
 
-#define KOPOU_CLUSTER_SIZE 128
+struct kopou_server kopou;
+struct kopou_settings settings;
+struct kopou_stats stats;
 
-struct node {
-	char *ip;
-	int port;
-};
+static void initialize_globals(int bg)
+{
+	kopou.pid = getpid();
+	kopou.current_time = time(NULL);
+	kopou.pidfile = kstr_new("/tmp/kopou.pid");
+	kopou.shutdown = 0;
+	kopou.listener = -1;
+	kopou.loop = NULL;
+	kopou.clistener = -1;
+	kopou.mlistener = -1;
+	kopou.nclients = 0;
+	kopou.curr_client = NULL;
+	kopou.bestmemory = 0;
+	kopou.exceedbestmemory = 0;
 
-struct node cluster[KOPOU_CLUSTER_SIZE];
+	settings.cluster_name = kstr_new("kopou-dev");
+	settings.address = kstr_new("0.0.0.0");
+	settings.port = 7878;
+	settings.cport = 7879;
+	settings.mport = 7880;
+	settings.background = bg;
+	settings.verbosity = KOPOU_DEFAULT_VERBOSITY;
+	settings.logfile = kstr_new("./kopou-dev.log");
+	settings.dbdir = kstr_new(".");
+	settings.dbfile = kstr_new("./kopou-dev.kpu");
+	settings.max_ccur_clients = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
+	settings.client_keepalive_timeout = KOPOU_CLIENT_KEEPALIVE_TIMEOUT;
+	settings.client_keepalive = 0;
+	settings.client_tcpkeepalive = 0;
 
+	stats.objects = 0;
+	stats.hits = 0;
+	stats.missed = 0;
+	stats.deleted = 0;
+}
+
+static void kopou_oom_handler(size_t size)
+{
+	_kdie("out of memory, total memory used: %lu bytes"
+		"and fail to alloc:%lu bytes", xalloc_total_mem_used(), size);
+}
+
+
+static void usages(char *name)
+{
+	fprintf(stdout, "\nUsages:\n\t%s <config-file> [--background[-b]]\n", name);
+	fprintf(stdout, "\t%s --help[-h]\n", name);
+	fprintf(stdout, "\t%s --version[-v]\n\n", name);
+	exit(EXIT_SUCCESS);
+}
+
+static void version(void)
+{
+	fprintf(stdout, "\nkopou-server v%s %d bits, +cluster[%d vnodes]\n\n",
+			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
+	exit(EXIT_SUCCESS);
+}
 
 void klog(int level, const char *fmt, ...)
 {
@@ -25,61 +77,211 @@ void klog(int level, const char *fmt, ...)
 	char msg[KOPOU_MAX_LOGMSG_LEN];
 	FILE *fp;
 
-	if (level < KOPOU_LOG_VERVOSITY)
+	if (level < settings.verbosity)
 		return;
 
 	va_start(params, fmt);
 	vsnprintf(msg, sizeof(msg), fmt, params);
 	va_end(params);
 
-	fp = KOPOU_LOG_STDOUT ? stdout : fopen(KOPOU_LOG_FILE, "a");
+	fp = settings.background ? fopen(settings.logfile, "a") : stdout;
 	if (!fp)
 		return;
-
-	pid_t pid;
-	pid = getpid();
 
 	char *levelstr[] = {"DEBUG", "INFO", "WARN", "ERR", "FATAL"};
 	time_t rawtime;
         struct tm *timeinfo;
         char time_buf[64];
-        time(&rawtime);
+        rawtime = time(NULL);
         timeinfo = localtime(&rawtime);
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
-	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], pid,  msg);
+	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], kopou.pid,  msg);
 	fflush(fp);
-	if (!KOPOU_LOG_STDOUT)
+	if (settings.background)
 		fclose(fp);
 }
 
-int main1(int argc, char **argv)
+static int become_background(void)
 {
-	klog(KOPOU_DEBUG, "starting server ...");
-	//_kdie("i am dieing %d", 2);
-	return 0;
+	int fd;
+	FILE *fp;
+	int r;
 
-	vnodes_state_t bitarray;
+	r = fork();
+	if (r == K_ERR)
+		return K_ERR;
+
+	if (r != 0)
+		_exit(EXIT_SUCCESS);
+
+	r = setsid();
+	if (r == K_ERR)
+		return K_ERR;
+
+	r = fork();
+	if (r == K_ERR)
+		return K_ERR;
+
+	if (r != 0)
+		_exit(EXIT_SUCCESS);
+
+	close (STDIN_FILENO);
+	fd = open("/dev/null", O_RDWR);
+	if (fd != STDIN_FILENO)
+		return K_ERR;
+	if (dup2(STDIN_FILENO, STDOUT_FILENO) != STDOUT_FILENO)
+		return K_ERR;
+	if (dup2(STDIN_FILENO, STDERR_FILENO) != STDERR_FILENO)
+		return K_ERR;
+
+	fp = fopen(kopou.pidfile,"w");
+	if (!fp)
+		return K_ERR;
+
+	kopou.pid = getpid();
+	fprintf(fp,"%d\n",(int)kopou.pid);
+	fclose(fp);
+
+	return K_OK;
+}
+
+static void kopou_signal_handler(int signal)
+{
+	if (signal == SIGINT || signal == SIGTERM)
+		kopou.shutdown = 1;
+}
+
+static void stop(void)
+{
 	int i;
-	printf("%d\n", _vnode_state_size_slots);
+	for (i = 0; i < kopou.nclients; i++) {
+		if (kopou.clients[i] && kopou.clients[i]->fd > 0)
+			tcp_close(kopou.clients[i]->fd);
+	}
+	tcp_close(kopou.listener);
+	if (settings.background)
+		unlink(kopou.pidfile);
+	/* signal db worker to finish job */
+}
 
+static int setup_sighandler_asyncworkers(void)
+{
+	sigset_t mask;
+        struct sigaction sigact;
 
-	vnode_state_add(bitarray, 55);
-	vnode_state_add(bitarray, 127);
-	vnode_state_add(bitarray, 77);
-	vnode_state_remove(bitarray, 55);
-	vnode_state_add(bitarray, 78);
-	vnode_state_add(bitarray, 89);
+	if (sigemptyset(&mask) == K_ERR)
+		return K_ERR;
 
-	vnode_state_empty(bitarray);
-	for (i = 0; i < VNODE_SIZE; i++){
-		if (vnode_state_contain(bitarray, i))
-			printf("%d: test yes\n", i);
+	if (sigaddset(&mask, SIGINT) == K_ERR)
+		return K_ERR;
+	if (sigaddset(&mask, SIGTERM) == K_ERR)
+		return K_ERR;
+	if (pthread_sigmask(SIG_BLOCK, &mask, NULL) != K_OK)
+		return K_ERR;
+
+	/*TODO initiate all the pthreads here*/
+
+	if (pthread_sigmask(SIG_UNBLOCK, &mask, NULL) != K_OK)
+		return K_ERR;
+	sigact.sa_handler = kopou_signal_handler;
+	if (sigemptyset(&sigact.sa_mask) == K_ERR)
+		return K_ERR;
+	sigact.sa_flags = SA_NOCLDSTOP;
+	if (sigaction(SIGINT, &sigact, NULL) == K_ERR)
+		return K_ERR;
+	if (sigaction(SIGTERM, &sigact, NULL) == K_ERR)
+		return K_ERR;
+
+	return K_OK;
+}
+
+static void loop_prepoll_handler(kevent_loop_t *ev)
+{
+	if (kopou.shutdown)
+		kevent_loop_stop(ev);
+	/* check cli req continue timeout/idle time 
+	 * clean them if required
+	 */
+}
+
+static void loop_error_handler(kevent_loop_t *ev, int eerrno)
+{
+	K_FORCE_USE(ev);
+	if (eerrno != EINTR)
+		klog(KOPOU_ERR, "loop err: %s", strerror(eerrno));
+	kopou.shutdown = 1;
+}
+
+static int initialize_kopou_listener(void)
+{
+	kopou.listener = tcp_create_listener(settings.address, settings.port,
+			KOPOU_TCP_NONBLOCK);
+	if (kopou.listener == TCP_ERR) {
+		klog(KOPOU_ERR, "fail creating listener %s:%d", settings.address,
+				settings.port);
+		return K_ERR;
 	}
 
-	vnode_state_fill(bitarray);
-	for (i = 0; i < VNODE_SIZE; i++){
-		if (vnode_state_contain(bitarray, i))
-			printf("%d: test yes\n", i);
+	kopou.loop = kevent_new(settings.max_ccur_clients + KOPOU_OWN_FDS,
+				loop_prepoll_handler, loop_error_handler);
+	if (!kopou.loop) {
+		klog(KOPOU_ERR, "fail creating main loop");
+		return K_ERR;
 	}
-	return 0;
+
+	if (kevent_add_event(kopou.loop, kopou.listener, KEVENT_READABLE,
+			kopou_accept_new_connection, NULL,
+			kopou_listener_error) == KEVENT_ERR) {
+		klog(KOPOU_ERR, "fail registering listener to loop");
+		return K_ERR;
+	}
+	return K_OK;
+}
+
+
+int main(int argc, char **argv)
+{
+	if (argc != 2)
+		if (argc != 3)
+			usages(argv[0]);
+
+	if (argc == 2) {
+		if (!strcmp(argv[1],"--help")
+				|| !strcmp(argv[1], "-h"))
+			usages(argv[0]);
+		else if (!strcmp(argv[1], "--version")
+				|| !strcmp(argv[1], "-v"))
+			version();
+	}
+
+	if (argc == 3)
+		if (strcmp(argv[2], "--background"))
+			if (strcmp(argv[2], "-b"))
+				usages(argv[0]);
+
+	initialize_globals(argc == 3);
+	if (set_config_from_file(argv[1]) == K_ERR)
+		_kdie("fail reading config '%s'", argv[1]);
+	settings.configfile = kstr_new(argv[1]);
+
+	if (settings.background)
+		if (become_background() == K_ERR)
+			_kdie("fail to become background");
+	if (setup_sighandler_asyncworkers() == K_ERR)
+		_kdie("fail to setup signal handlers");
+
+
+	xalloc_set_oom_handler(kopou_oom_handler);
+	kopou.clients = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
+							sizeof(kclient_t*));
+	klog(KOPOU_WARNING, "starting kopou ...");
+	if (initialize_kopou_listener() == K_ERR)
+		_kdie("fail to start listener");
+
+	kevent_loop_start(kopou.loop);
+
+	stop();
+	kevent_del(kopou.loop);
+	klog(KOPOU_WARNING, "stoping kopou ...");
+	return EXIT_SUCCESS;
 }

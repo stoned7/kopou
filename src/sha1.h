@@ -6,7 +6,8 @@ By Steve Reid <steve@edmweb.com>
 */
 
 /* Continue 100% Public Domain
-   Add new api by sujandutta@gmail.com
+   Added new API
+   "sujan dutta" <sujandutta@gmail.com>
 */
 
 #ifndef __SHA1_H__
@@ -25,6 +26,6 @@ void SHA1Init(SHA1_CTX* context);
 void SHA1Update(SHA1_CTX* context, const unsigned char* data, u_int32_t len);
 void SHA1Final(unsigned char digest[20], SHA1_CTX* context);
 
-void sha1hash(const char *buf, size_t len, char *hashkey)
+void sha1hash(const char *buf, size_t len, char *hashkey);
 
 #endif

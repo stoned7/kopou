@@ -19,7 +19,7 @@ aarray_t *aarray_new(unsigned long size, aarray_hashfunction hf,
 
 void aarray_del(aarray_t *aa)
 {
-	int i;
+	unsigned long i;
 	aarray_element_t *ele, *temp;
 
 	for (i = 0; i < aa->nbucket; i++) {

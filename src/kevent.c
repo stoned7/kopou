@@ -2,10 +2,10 @@
 #include "kopou.h"
 #include "kevent.h"
 
-struct kevent_loop* kevent_new(int size, onprepoll onprepoll_handler)
+kevent_loop_t *kevent_new(int size, onloop_prepoll onprepoll_handler,
+				onloop_error onerror_handler)
 {
-	int i;
-	struct kevent_loop *el;
+	kevent_loop_t *el;
 	el = xmalloc(sizeof(*el));
 
 	el->epd = epoll_create(KEVENT_HINT);
@@ -14,12 +14,13 @@ struct kevent_loop* kevent_new(int size, onprepoll onprepoll_handler)
 		return NULL;
 	}
 	el->events = xcalloc(size, sizeof(struct epoll_event));
-	el->kevents = xcalloc(size, sizeof(struct kevent));
+	el->kevents = xcalloc(size, sizeof(kevent_t));
 	el->event_size = size;
 	el->_event_size = 0;
 	el->evcounter = 0;
-	el->onprepoll_handler = onprepoll_handler;
-	el->stop_asap = 0;
+	el->prepoll_handler = onprepoll_handler;
+	el->error_handler = onerror_handler;
+	el->stop = 0;
 
 	return el;
 }
@@ -31,25 +32,24 @@ void kevent_del(struct kevent_loop *el)
 	xfree(el);
 }
 
-static void _reset_event(struct kevent_loop *el, struct kevent *ev)
+static void _reset_event(kevent_loop_t *el, kevent_t *ev)
 {
 	el->_event_size--;
 	ev->eventtype = KEVENT_FREE;
 	ev->fd = -1;
-	ev->privatedata = NULL;
 	ev->onerror_handler = NULL;
 	ev->onread_handler = NULL;
 	ev->onwrite_handler = NULL;
 }
 
-static void _process(struct kevent_loop *el, struct kevent *ev)
+static void _process(kevent_loop_t *el, kevent_t *ev)
 {
 	if (ev->eventtype & KEVENT_FREE)
 		return;
 
 	if (ev->eventtype & KEVENT_FAULTY) {
 		if (ev->onerror_handler != NULL)
-			ev->onerror_handler(ev->fd, ev->privatedata);
+			ev->onerror_handler(ev->fd, ev->eventtype);
 		int fdtemp = ev->fd;
 		eventtype_t evttemp = ev->eventtype;
 		_reset_event(el, ev);
@@ -59,23 +59,23 @@ static void _process(struct kevent_loop *el, struct kevent *ev)
 	}
 
 	if (ev->eventtype & KEVENT_READABLE && ev->onread_handler != NULL)
-			ev->onread_handler(ev->fd, ev->privatedata);
+			ev->onread_handler(ev->fd, ev->eventtype);
 	if (ev->eventtype & KEVENT_WRITABLE && ev->onwrite_handler != NULL)
-			ev->onwrite_handler(ev->fd, ev->privatedata);
+			ev->onwrite_handler(ev->fd, ev->eventtype);
 }
 
-static int _poll(struct kevent_loop *el)
+static int _poll(kevent_loop_t *el)
 {
 	int nev, i;
 	nev = epoll_wait(el->epd, el->events, el->event_size,
 						KEVENT_POLL_TIMEOUT);
 	if (nev == KEVENT_ERR) {
-		el->stop_asap = 1;
+		el->error_handler(el, errno);
 		return KEVENT_ERR;
 	}
 
 	for (i = 0; i < nev; i++) {
-		struct kevent *ev;
+		kevent_t *ev;
 		eventtype_t et = KEVENT_FREE;
 		ev = &el->kevents[el->events[i].data.fd];
 
@@ -93,25 +93,27 @@ static int _poll(struct kevent_loop *el)
 	return nev;
 }
 
-int kevent_loop_start(struct kevent_loop *el)
+int kevent_loop_start(kevent_loop_t *el)
 {
 	int r = KEVENT_OK;
-	while (!el->stop_asap) {
-		if (el->onprepoll_handler != NULL)
-			el->onprepoll_handler(el);
+	while (!el->stop) {
+		if (el->prepoll_handler)
+			el->prepoll_handler(el);
+		if (el->stop)
+			break;
 		r = _poll(el);
 		el->evcounter++;
 	}
 	return r;
 }
 
-
-void kevent_loop_stop(struct kevent_loop *el)
+/*
+void kevent_loop_stop(kevent_loop_t *el)
 {
-	el->stop_asap = 1;
+	el->stop = 1;
 }
 
-int kevent_is_free(struct kevent_loop *el, int fd)
+int kevent_is_free(kevent_loop_t *el, int fd)
 {
 	if (fd >= el->event_size)
 		return KEVENT_ERR;
@@ -120,7 +122,7 @@ int kevent_is_free(struct kevent_loop *el, int fd)
 	return 0;
 }
 
-int kevent_already_writable(struct kevent_loop *el, int fd)
+int kevent_already_writable(kevent_loop_t *el, int fd)
 {
 	if (fd >= el->event_size)
 		return KEVENT_ERR;
@@ -129,7 +131,7 @@ int kevent_already_writable(struct kevent_loop *el, int fd)
 	return 0;
 }
 
-int kevent_already_readable(struct kevent_loop *el, int fd)
+int kevent_already_readable(kevent_loop_t *el, int fd)
 {
 	if (fd >= el->event_size)
 		return KEVENT_ERR;
@@ -137,14 +139,15 @@ int kevent_already_readable(struct kevent_loop *el, int fd)
 		return 1;
 	return 0;
 }
+*/
 
-int kevent_add_event(struct kevent_loop *el, int fd, eventtype_t eventtype,
+int kevent_add_event(kevent_loop_t *el, int fd, eventtype_t eventtype,
 		onread onread_handler, onwrite onwrite_handler,
-		onerror onerror_handler, void *privatedata)
+		onerror onerror_handler)
 {
 	int operation, r;
 	struct epoll_event ev;
-	struct kevent *kev;
+	kevent_t *kev;
 	eventtype_t req_eventtype;
 
 	if (fd >= el->event_size)
@@ -180,17 +183,16 @@ int kevent_add_event(struct kevent_loop *el, int fd, eventtype_t eventtype,
 
 	kev->eventtype = eventtype;
 	kev->fd = fd;
-	kev->privatedata = privatedata;
 	klog(KOPOU_DEBUG, "fd: %d, add ev: %d, curr ev: %d, size: %d",
 		fd, req_eventtype, eventtype, el->_event_size);
 	return KEVENT_OK;
 }
 
 
-void kevent_del_event(struct kevent_loop *el, int fd, eventtype_t eventtype)
+void kevent_del_event(kevent_loop_t *el, int fd, eventtype_t eventtype)
 {
 	struct epoll_event ev;
-	struct kevent *kev;
+	kevent_t *kev;
 
 	if (fd >= el->event_size)
 		return;
