@@ -19,29 +19,28 @@ static void initialize_globals(int bg)
 	kopou.current_time = time(NULL);
 	kopou.pidfile = kstr_new("/tmp/kopou.pid");
 	kopou.shutdown = 0;
-	kopou.listener = -1;
+	kopou.hlistener = -1;
 	kopou.loop = NULL;
-	kopou.clistener = -1;
-	kopou.mlistener = -1;
-	kopou.nclients = 0;
-	kopou.curr_client = NULL;
+	kopou.ilistener = -1;
+	kopou.nconns = 0;
+	kopou.curr_conn = NULL;
 	kopou.bestmemory = 0;
 	kopou.exceedbestmemory = 0;
+	kopou.conns = NULL;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
 	settings.port = 7878;
-	settings.cport = 7879;
-	settings.mport = 7880;
+	settings.kport = 7879;
 	settings.background = bg;
 	settings.verbosity = KOPOU_DEFAULT_VERBOSITY;
 	settings.logfile = kstr_new("./kopou-dev.log");
 	settings.dbdir = kstr_new(".");
 	settings.dbfile = kstr_new("./kopou-dev.kpu");
-	settings.max_ccur_clients = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
-	settings.client_keepalive_timeout = KOPOU_CLIENT_KEEPALIVE_TIMEOUT;
-	settings.client_keepalive = 0;
-	settings.client_tcpkeepalive = 0;
+	settings.http_max_ccur_conns = KOPOU_DEFAULT_MAX_CONCURRENT_CLIENTS;
+	settings.http_keepalive_timeout = KOPOU_DEFAULT_HTTP_KEEPALIVE_TIMEOUT;
+	settings.http_keepalive = 0;
+	settings.tcp_keepalive = 0;
 
 	stats.objects = 0;
 	stats.hits = 0;
@@ -154,11 +153,11 @@ static void kopou_signal_handler(int signal)
 static void stop(void)
 {
 	int i;
-	for (i = 0; i < kopou.nclients; i++) {
-		if (kopou.clients[i] && kopou.clients[i]->fd > 0)
-			tcp_close(kopou.clients[i]->fd);
+	for (i = 0; i < kopou.nconns; i++) {
+		if (kopou.conns[i] && kopou.conns[i]->fd > 0)
+			tcp_close(kopou.conns[i]->fd);
 	}
-	tcp_close(kopou.listener);
+	tcp_close(kopou.hlistener);
 	if (settings.background)
 		unlink(kopou.pidfile);
 	/* signal db worker to finish job */
@@ -214,15 +213,15 @@ static void loop_error_handler(kevent_loop_t *ev, int eerrno)
 
 static int initialize_kopou_listener(void)
 {
-	kopou.listener = tcp_create_listener(settings.address, settings.port,
+	kopou.hlistener = tcp_create_listener(settings.address, settings.hport,
 			KOPOU_TCP_NONBLOCK);
-	if (kopou.listener == TCP_ERR) {
-		klog(KOPOU_ERR, "fail creating listener %s:%d", settings.address,
-				settings.port);
+	if (kopou.hlistener == TCP_ERR) {
+		klog(KOPOU_ERR, "fail creating http listener %s:%d",
+				settings.address, settings.hport);
 		return K_ERR;
 	}
 
-	kopou.loop = kevent_new(settings.max_ccur_clients + KOPOU_OWN_FDS,
+	kopou.loop = kevent_new(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 				loop_prepoll_handler, loop_error_handler);
 	if (!kopou.loop) {
 		klog(KOPOU_ERR, "fail creating main loop");
@@ -230,9 +229,9 @@ static int initialize_kopou_listener(void)
 	}
 
 	if (kevent_add_event(kopou.loop, kopou.listener, KEVENT_READABLE,
-			kopou_accept_new_connection, NULL,
-			kopou_listener_error) == KEVENT_ERR) {
-		klog(KOPOU_ERR, "fail registering listener to loop");
+			kopou_http_new_connection, NULL,
+			kopou_http_listener_error) == KEVENT_ERR) {
+		klog(KOPOU_ERR, "fail registering http listener to loop");
 		return K_ERR;
 	}
 	return K_OK;
@@ -260,7 +259,7 @@ int main(int argc, char **argv)
 				usages(argv[0]);
 
 	initialize_globals(argc == 3);
-	if (set_config_from_file(argv[1]) == K_ERR)
+	if (settings_from_file(argv[1]) == K_ERR)
 		_kdie("fail reading config '%s'", argv[1]);
 	settings.configfile = kstr_new(argv[1]);
 
@@ -272,8 +271,8 @@ int main(int argc, char **argv)
 
 
 	xalloc_set_oom_handler(kopou_oom_handler);
-	kopou.clients = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
-							sizeof(kclient_t*));
+	kopou.conns = xcalloc(settings.max_ccur_clients + KOPOU_OWN_FDS,
+							sizeof(kconnection_t*));
 	klog(KOPOU_WARNING, "starting kopou ...");
 	if (initialize_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");

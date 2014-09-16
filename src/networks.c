@@ -1,5 +1,49 @@
 #include "kopou.h"
 
+static kconnection_t *create_http_connection(int fd)
+{
+	kconnection_t *c = xmalloc(sizeof(kconnection_t));
+	c->fd = fd;
+	c->connection_type = CONNECTION_TYPE_HTTP;
+	c->connection_ts = time(NULL);
+	c->last_interaction_ts = -1;
+	c->disconnect_after_write = 0;
+
+	c->req = xmalloc(sizeof(khttp_request_t));
+	khttp_request_t *r = (khttp_request_t*)(c->req);
+
+	r->nsplitted_uri = 0;
+	r->splitted_uri = NULL;
+	r->method = HTTP_METHOD_NOTSUPPORTED;
+	r->http_version = 0;
+	r->connection_keepalive = 0;
+	r->connection_keepalive_timeout = 0;
+	r->content_length = 0;
+	r->content_type = NULL;
+	r->body = NULL;
+	r->headers = NULL;
+	r->_parsing_state = parsing_reqline_start;
+	r->buf = NULL;
+	r->cmd = NULL;
+
+	r->res = xmalloc(sizeof(khttp_response_t));
+	r->res->status = 0;
+	r->res->statusstr = NULL;
+	r->res->content_length = 0;
+	r->res->content_type = NULL;
+	r->res->headers = NULL;
+	r->res->buf = NULL;
+
+	return c;
+}
+
+static void delete_http_connection(kconnection_t *c)
+{};
+
+static void reset_http_connection(kconnection_t *c)
+{};
+
+
 static void set_new_kclient(int fd, char *addr, int type)
 {
 	kclient_t *c = xmalloc(sizeof(kclient_t));
@@ -57,7 +101,7 @@ static void reset_client(kclient_t *c)
 	c->resbuf = NULL;
 }
 
-static void kclient_writer(int fd, eventtype_t evtype)
+static void http_response_handler(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
 	kclient_t *c = kopou.clients[fd];
@@ -102,7 +146,7 @@ static void kclient_writer(int fd, eventtype_t evtype)
 		c->last_access_ts = kopou.current_time;
 }
 
-static void kclient_reader(int fd, eventtype_t evtype)
+static void http_request_handler(int fd, eventtype_t evtype)
 {
 	ssize_t nread;
 	int tryagain;
@@ -149,66 +193,66 @@ static void kclient_reader(int fd, eventtype_t evtype)
 }
 
 
-static void kclient_error(int fd, eventtype_t evtype)
+static void http_error_handler(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
-	klog(KOPOU_ERR, "client err:%d, %s",fd, strerror(errno));
-	free_client(kopou.clients[fd]);
-	kopou.nclients--;
+	klog(KOPOU_ERR, "http err:%d, %s",fd, strerror(errno));
+	delete_http_connection(kopou.conns[fd]);
+	kopou.nconns--;
 }
 
-void kopou_accept_new_connection(int fd, eventtype_t evtype)
+void kopou_http_new_connection(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
 
 	char remote_addr[ADDRESS_LENGTH];
 	int max, conn;
-
 	int tryagain;
-	max = KOPOU_MAX_ACCEPT_CONN;
+
+	max = KOPOU_HTTP_ACCEPT_MAX_CONN;
 	while (max--) {
-		conn = tcp_accept(fd, remote_addr, sizeof(remote_addr), NULL,
-				KOPOU_TCP_NONBLOCK, &tryagain);
+		conn = tcp_accept(fd, remote_addr, sizeof(remote_addr),
+					NULL, KOPOU_TCP_NONBLOCK, &tryagain);
 		if (conn == TCP_ERR) {
-			if (tryagain)
-				break;
-			klog(KOPOU_ERR, "listener connection err: %d:%s",
+			if (tryagain) break;
+			klog(KOPOU_ERR, "http listener connection err: %d:%s",
 					tryagain, strerror(errno));
 			break;
 		}
 
-		if (kopou.nclients > settings.max_ccur_clients) {
-			char msg[] = "-1\r\n#16$MaxClientExceeds\r\n";
+		if (kopou.nconns > settings.http_max_ccur_conns) {
+			char msg[] = "HTTP/1.1 503 Service unavailable\r\nConnection: close\r\n";
 			tcp_write(conn, msg, sizeof(msg), &tryagain);
-			klog(KOPOU_WARNING, "exceed max concurrent connection limits");
+			klog(KOPOU_WARNING, "exceed max concurrent connection limits: %zu",
+								kopou.nconns);
 			tcp_close(conn);
 			continue;
 		}
 
-		if (settings.client_keepalive) {
-			if (tcp_set_keepalive(conn, KOPOU_TCP_KEEPALIVE) ==
-					TCP_ERR) {
+		if (settings.tcp_keepalive) {
+			if (tcp_set_keepalive(conn,
+				KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL) == TCP_ERR) {
 				klog(KOPOU_WARNING, "tcp keepalive setting err: %s",
 						strerror(errno));
 			}
 		}
 
-		klog(KOPOU_DEBUG, "new conn(%d): %s", conn, remote_addr);
+		klog(KOPOU_DEBUG, "new http conn:(%d)", conn);
 		if (kevent_add_event(kopou.loop, conn, KEVENT_READABLE,
-			   kclient_reader, NULL, kclient_error) == KEVENT_ERR) {
+			   http_request_handler, NULL, http_error_handler) == KEVENT_ERR) {
 			klog(KOPOU_WARNING, "new conn register fail, closing '%d'", conn);
 			tcp_close(conn);
 			continue;
 		}
-		set_new_kclient(conn, remote_addr, KOPOU_CLIENT_TYPE_NORMAL);
-		kopou.nclients++;
+		create_http_connection(conn);
+		kopou.nconns++;
 	}
 }
 
-void kopou_listener_error(int fd, eventtype_t evtype)
+void kopou_http_listener_error(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(fd);
 	K_FORCE_USE(evtype);
-	klog(KOPOU_ERR, "listener err: %s", strerror(errno));
+	klog(KOPOU_ERR, "http listener err: %s", strerror(errno));
 	kopou.shutdown = 1;
 }

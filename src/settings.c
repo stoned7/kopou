@@ -120,7 +120,7 @@ err:
 	exit(EXIT_FAILURE);
 }
 
-int set_config_from_file(const kstr_t filename)
+int settings_from_file(const kstr_t filename)
 {
 	char buf[CONFIG_LINE_LENGTH_MAX];
 	FILE *configfile;
