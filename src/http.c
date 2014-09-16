@@ -4,6 +4,7 @@
 #include <time.h>
 #include <stdint.h>
 
+#include "kopou.h"
 #include "kstring.h"
 #include "xalloc.h"
 
@@ -551,44 +552,6 @@ done:
 	return HTTP_OK;
 }
 
-kconnection_t *create_http_connection(int fd)
-{
-	kconnection_t *c = xmalloc(sizeof(kconnection_t));
-	c->fd = fd;
-	c->connection_type = CONNECTION_TYPE_HTTP;
-	c->connection_ts = time(NULL);
-	c->last_interaction_ts = -1;
-	c->disconnect_after_write = 0;
-
-	c->req = xmalloc(sizeof(khttp_request_t));
-	khttp_request_t *r = (khttp_request_t*)(c->req);
-
-	r->nsplitted_uri = 0;
-	r->splitted_uri = NULL;
-	r->method = HTTP_METHOD_NOTSUPPORTED;
-	r->http_version = 0;
-	r->connection_keepalive = 0;
-	r->connection_keepalive_timeout = 0;
-	r->content_length = 0;
-	r->content_type = NULL;
-	r->body = NULL;
-	r->headers = NULL;
-	r->_parsing_state = parsing_reqline_start;
-	r->buf = NULL;
-	r->cmd = NULL;
-
-	r->res = xmalloc(sizeof(khttp_response_t));
-	r->res->status = 0;
-	r->res->statusstr = NULL;
-	r->res->content_length = 0;
-	r->res->content_type = NULL;
-	r->res->headers = NULL;
-	r->res->buf = NULL;
-
-	return c;
-}
-
-
 int http_parse_header_line(kconnection_t *conn)
 {
 	unsigned char c, ch, *p;
@@ -763,205 +726,17 @@ done:
 	return HTTP_OK;
 }
 
-int http_set_system_header(khttp_request_t *r, char *h,int hl, char *v, int vl)
-{
-	if (!strncasecmp(HTTP_PROXY_CONNECTION, h, hl)
-			|| !strncasecmp(HTTP_CONNECTION, h, hl)) {
-		if (!strncasecmp(HTTP_CONN_CLOSE, v, vl)) {
-			r->connection_close = 1;
-			return HTTP_OK;
-		} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, v, vl)) {
-			r->connection_keepalive = 1;
-			return HTTP_OK;
-		}
-	} else if (!strncasecmp(HTTP_CONTENT_LENGTH, h, hl)) {
-		errno = 0;
-		r->content_length = strtoul(v, NULL, 10);
-		if (errno) return HTTP_ERR;
-		return HTTP_OK;
-	} else if (!strncasecmp(HTTP_CONTENT_TYPE, h, hl)) {
-		r->content_type = _kstr_create(v, vl);
-		return HTTP_OK;
-	} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, h, hl)) {
-		int i = atoi(v);
-		if (i < 0 || i > 65536) return HTTP_ERR;
-		r->connection_keepalive_timeout = i;
-		return HTTP_OK;
-	} else if (!strncasecmp(HTTP_TRANSFER_ENCODING, h, hl)) {
-		if (!strncasecmp(HTTP_TE_CHUNKED, v, vl)) {
-			r->transfer_encoding_chunked = 1;
-			return HTTP_OK;
-		}
-	}
-	return HTTP_CONTINUE;
-}
-
 int http_parse_contentlength_body(kconnection_t *c)
 {
+	K_FORCE_USE(c);
 	return HTTP_OK;
 }
 
 int http_parse_chunked_body(kconnection_t *c)
 {
+	K_FORCE_USE(c);
 	/* not supported yet */
 	return HTTP_ERR;
-}
-
-
-#include <stdlib.h>
-#include <string.h>
-
-
-int main()
-{
-
-	char *req = "GET /package/detail/37?abc=xyz&123 HTTP/1.1\r\nHost: dev-packagedeployment.tavisca.com\r\nConnection:keep-alive\r\nCache-Control: max-age=0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8\r\nUser-Agent: Mozilla/5.0 (Windows NT 6.2; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.103 Safari/537.36\r\nAccept-Encoding: gzip,deflate,sdch\r\nAccept-Language: en-US,en;q=0.8\r\nCookie: ASP.NET_SessionId=t3lve43o5fzii2xwji53anuc\r\nContent-Length: 67890\r\nContent-Type: application/json, abcd\r\nKeep-Alive: 300\r\n\r\n";
-
-	int reqlen = strlen(req) + 1;
-
-	kconnection_t *c = create_http_connection(1);
-
-	khttp_request_t *r = (khttp_request_t*)(c->req);
-	r->buf = xmalloc(sizeof(kbuffer_t));
-	r->buf->start = xmalloc(reqlen);
-	memcpy(r->buf->start, req, reqlen);
-
-	r->buf->end = r->buf->start + (reqlen - 1);
-	r->buf->pos = r->buf->start;
-	r->buf->last = r->buf->end;
-	r->buf->next = NULL;
-
-	int re = http_parse_requestline(c);
-	if (re == HTTP_OK) {
-
-		if (r->_parsing_state == parsing_reqline_done) {
-
-			size_t rllen = (r->args_start == NULL)
-				? ((r->uri_end) - (r->uri_start + 1))
-				: ((r->args_start -1) - (r->uri_start + 1));
-			kstr_t uri = _kstr_create(r->uri_start + 1, rllen);
-			r->nsplitted_uri = kstr_tok(uri, "/", &r->splitted_uri);
-
-			do {
-				re = http_parse_header_line(c);
-				printf("header result: %d, %d\n", re, r->_parsing_state);
-
-				if (re == HTTP_ERR)
-					break;
-
-				if (r->_parsing_state == parsing_header_line_done) {
-					size_t hl = r->header_name_end - r->header_name_start;
-					if (hl > HTTP_HEADER_MAXLEN) {
-						/* TODO error 413 response */
-					}
-					size_t vl = r->header_value_end - r->header_value_start;
-					re = http_set_system_header(r, r->header_name_start, hl, r->header_value_start, vl);
-				}
-			} while (r->_parsing_state != parsing_header_done);
-
-			if (r->_parsing_state == parsing_header_done) {
-				if (r->content_length > 0) {
-					r->body = r->header_end + 2;
-					//r->body_start_index = 0;
-				}
-			}
-
-		}
-	}
-
-	/*
-
-	char *reqlines[] = { "GET / HTTP/1.0\r\n",
-			   "GET /package/detail/37 HTTP/1.1\r\n",
-			   "GET /package HTTP/1.1\r\n",
-			   "GET /package/detail/37?abc=xyz&123 HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com/package/detail/37 HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com/package HTTP/1.1\r\n",
-			   "GET http://www.google.com/package/detail/37 HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com:8888/package/detail/37 HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com:8888/ HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com/ HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com:8080 HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com/?aaa=bbb&ccc=ddd HTTP/1.1\r\n",
-			   "GET http://dev-packagedeployment.tavisca.com/hello world/ram?aaa=bbb&ccc=ddd HTTP/1.1\r\n"
-			};
-
-	int i;
-	for (i = 0; i < 14; i++) {
-		int len = strlen(reqlines[i]) + 1;
-
-		kconnection_t *c = create_http_connection(i);
-		khttp_request_t *r = (khttp_request_t*)(c->req);
-		r->buffer = xmalloc(sizeof(kbuffer_t));
-		r->buffer->start = xmalloc(len);
-		memcpy(r->buffer->start, reqlines[i], len);
-		r->buffer->end = r->buffer->start + (len - 1);
-		r->buffer->pos = r->buffer->start;
-		r->buffer->last = r->buffer->end;
-		r->buffer->size = len;
-
-		int state = http_parse_requestline(c);
-		printf("state %d: %d, %d\n", i, state, r->space_in_uri);
-		if (state == 0) {
-
-			size_t len1 = (r->args_start == NULL)
-				? ((r->uri_end) - (r->uri_start + 1))
-				: ((r->args_start -1) - (r->uri_start + 1));
-			printf("%lu\n", len1);
-			kstr_t uri = _kstr_create(r->uri_start + 1, len1);
-			printf("%s\n", uri);
-			kstr_t *tokens;
-			int uric = kstr_tok(uri, "/", &tokens);
-			int i;
-			for (i = 0; i < uric; i++)
-				printf("%s\n", tokens[i]);
-		}
-
-	}
-	*/
-
-	/*
-
-	char *reqstr = "GET http://dev-packagedeployment.tavisca.com/package/detail/37 HTTP/1.1\r\nHost: dev-packagedeployment.tavisca.com\r\nKeep-Alive: 300\r\nConnection: keep-alive\r\nContent-Type: Application/Json\r\nContent-Length: 33\r\n\r\n{\"name\":sujan,\"phone\":9723750255}";
-
-	char *reqline = "GET /a/b/hello%20world HTTP/1.0\r\n";
-	//char *reqline = "GET / HTTP/1.0\r\n";
-	//char *reqline = "GET /package/detail/37?abc=xyz&123 HTTP/1.1\r\n";
-	//char *reqline = "GET /package/detail/37 HTTP/1.1\r\n";
-
-	size_t len = strlen(reqline);
-
-	kconnection_t *c = create_http_connection(1);
-	khttp_request_t *r = (khttp_request_t*)(c->req);
-	r->buffer = xmalloc(sizeof(kbuffer_t));
-	r->buffer->start = xmalloc(len);
-	memcpy(r->buffer->start, reqline, len);
-	r->buffer->end = r->buffer->start + (len - 1);
-	r->buffer->pos = r->buffer->start;
-	r->buffer->last = r->buffer->end;
-	r->buffer->size = len;
-
-	int state = http_parse_requestline(c);
-
-
-	if (state == 0) {
-
-		size_t len = (r->args_start == NULL)
-			? ((r->uri_end) - (r->uri_start + 1))
-			: (r->args_start- (r->uri_start + 1));
-		printf("%lu\n", len);
-		kstr_t uri = _kstr_create(r->uri_start + 1, len);
-		kstr_t *tokens;
-		int uric = kstr_tok(uri, "/", &tokens);
-		int i;
-		for (i = 0; i < uric; i++)
-			printf("%s\n", tokens[i]);
-		printf("%s\n", uri);
-	}
-	printf("state: %d\n", state);
-	*/
-	return EXIT_SUCCESS;
 }
 
 

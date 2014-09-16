@@ -53,17 +53,17 @@ void klog(int level, const char *fmt, ...);
 		exit(EXIT_FAILURE);\
 	} while (0)
 
-#define REQ_BUFFER_SIZE (16 * 1024)
-#define REQ_CONTENT_LENGTH_MAX (64 * (1024 * 1024))
-#define REQ_BUFFER_SIZE_MAX (2048 + REQ_CONTENT_LENGTH_MAX)
-#define RES_WRITTEN_SIZE_MAX (16 * (1024 * 1024))
+#define HTTP_REQ_BUFFER_SIZE (16 * 1024)
+#define HTTP_REQ_CONTENT_LENGTH_MAX (64 * (1024 * 1024))
+#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
+#define HTTP_RES_WRITTEN_SIZE_MAX (16 * (1024 * 1024))
 
-#define KOPOU_REQ_CONTINUE_IDLE_TIMEOUT (60)
-#define KOPOU_DEFAULT_HTTP_KEEPALIVE_TIMEOUT (10 * (60 * 60))
+#define HTTP_REQ_CONTINUE_IDLE_TIMEOUT (60)
+#define HTTP_DEFAULT_KEEPALIVE_TIMEOUT (10 * (60 * 60))
 
 #define CONFIG_LINE_LENGTH_MAX 1024
 
-#define KOPOU_DEFAULT_HTTP_MAX_CONCURRENT_CONNS 1024
+#define HTTP_DEFAULT_MAX_CONCURRENT_CONNS 1024
 #define KOPOU_OWN_FDS (32 + (2 * VNODE_SIZE))
 #define KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL 100
 
@@ -109,7 +109,6 @@ typedef enum {
 	parsing_reqline_host_start,
 	parsing_reqline_host,
 	parsing_reqline_host_end,
-	parsing_reqline_host_ip_literal,
 	parsing_reqline_port,
 	parsing_reqline_host_http_09,
 	parsing_reqline_after_slash_in_uri,
@@ -139,12 +138,6 @@ typedef enum {
 	parsing_header_done
 } parsing_state_t;
 
-struct kopou_stats {
-	long long objects;
-	long long missed;
-	long long hits;
-	long long deleted;
-};
 
 typedef struct {
 	void *val;
@@ -169,14 +162,23 @@ typedef struct kbuffer {
 	size_t size;
 } kbuffer_t;
 
-struct req_blueprint {
+typedef struct {
+	void *req;
+	time_t connection_ts;
+	time_t last_interaction_ts;
+	int fd;
+	unsigned connection_type:1;
+	unsigned disconnect_after_reply:1;
+} kconnection_t;
+
+typedef struct {
 	kstr_t name;
-	void (*action)(struct kclient *client);
+	void (*action)(kconnection_t *client);
 	int readonly;
 	int argc;
 	int kindex;
 	int cindex;
-};
+} kcommand_t;
 
 typedef struct {
 	knamevalue_t *headers;
@@ -187,8 +189,7 @@ typedef struct {
 } khttp_response_t;
 
 typedef struct {
-
-	void *cmd;
+	kcommand_t *cmd;
 	khttp_response_t *res;
 	kbuffer_t *buf;
 
@@ -223,6 +224,7 @@ typedef struct {
 	kstr_t content_type;
 	parsing_state_t _parsing_state;
 
+	time_t timestamp;
 	unsigned body_end_index;
 
 	unsigned connection_keepalive_timeout:16;
@@ -241,15 +243,6 @@ typedef struct {
 
 } khttp_request_t;
 
-typedef struct {
-	void *req;
-	time_t connection_ts;
-	time_t last_interaction_ts;
-	int fd;
-	unsigned connection_type:1;
-	unsigned disconnect_after_write:1;
-} kconnection_t;
-
 struct kopou_settings {
 	kstr_t cluster_name;
 	kstr_t address;
@@ -258,7 +251,7 @@ struct kopou_settings {
 	kstr_t dbdir;
 	kstr_t dbfile;
 	kstr_t workingdir;
-	int http_max_ccur_clients;
+	int http_max_ccur_conns;
 	int tcp_keepalive;
 	int http_keepalive;
 	int port;
@@ -266,6 +259,13 @@ struct kopou_settings {
 	int background;
 	int verbosity;
 	int http_keepalive_timeout;
+};
+
+struct kopou_stats {
+	long long objects;
+	long long missed;
+	long long hits;
+	long long deleted;
 };
 
 struct kopou_server {

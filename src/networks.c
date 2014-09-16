@@ -3,106 +3,232 @@
 static kconnection_t *create_http_connection(int fd)
 {
 	kconnection_t *c = xmalloc(sizeof(kconnection_t));
+
 	c->fd = fd;
 	c->connection_type = CONNECTION_TYPE_HTTP;
-	c->connection_ts = time(NULL);
+	c->connection_ts = kopou.current_time;
 	c->last_interaction_ts = -1;
-	c->disconnect_after_write = 0;
+	c->disconnect_after_reply = 0;
 
 	c->req = xmalloc(sizeof(khttp_request_t));
 	khttp_request_t *r = (khttp_request_t*)(c->req);
 
-	r->nsplitted_uri = 0;
+	r->cmd = NULL;
+	r->buf = NULL;
+
+	r->request_start = NULL;
+	r->request_end = NULL;
+	r->method_end = NULL;
+	r->schema_start = NULL;
+	r->schema_end = NULL;
+	r->host_start = NULL;
+	r->host_end = NULL;
+	r->port_end = NULL;
+	r->uri_start = NULL;
+	r->args_start = NULL;
+	r->uri_end = NULL;
+	r->uri_ext = NULL;
+	r->http_start = NULL;
+
+	r->header_start = NULL;
+	r->header_name_start = NULL;
+	r->header_name_end = NULL;
+	r->header_value_start = NULL;
+	r->header_value_end = NULL;
+	r->header_end = NULL;
+
+	r->body = NULL;
+
 	r->splitted_uri = NULL;
-	r->method = HTTP_METHOD_NOTSUPPORTED;
-	r->http_version = 0;
-	r->connection_keepalive = 0;
-	r->connection_keepalive_timeout = 0;
+	r->headers = NULL;
+	r->nsplitted_uri = 0;
+
 	r->content_length = 0;
 	r->content_type = NULL;
-	r->body = NULL;
-	r->headers = NULL;
 	r->_parsing_state = parsing_reqline_start;
-	r->buf = NULL;
-	r->cmd = NULL;
+	r->body_end_index = 0;
+
+	r->connection_keepalive_timeout = 0;
+	r->http_version = 0;
+	r->body_start_index = 0;
+	r->major_version = 0;
+	r->minor_version = 0;
+	r->method = HTTP_METHOD_NOTSUPPORTED;
+	r->connection_keepalive = 0;
+	r->connection_close = 0;
+	r->transfer_encoding_chunked = 0;
+	r->complex_uri = 0;
+	r->quoted_uri = 0;
+	r->plus_in_uri = 0;
+	r->space_in_uri = 0;
 
 	r->res = xmalloc(sizeof(khttp_response_t));
 	r->res->status = 0;
-	r->res->statusstr = NULL;
-	r->res->content_length = 0;
-	r->res->content_type = NULL;
 	r->res->headers = NULL;
 	r->res->buf = NULL;
+	r->res->cbuf = NULL;
+	r->res->cbuf_len = 0;
 
 	return c;
 }
 
 static void delete_http_connection(kconnection_t *c)
-{};
-
-static void reset_http_connection(kconnection_t *c)
-{};
-
-
-static void set_new_kclient(int fd, char *addr, int type)
 {
-	kclient_t *c = xmalloc(sizeof(kclient_t));
-	c->fd = fd;
-	c->remoteaddr = kstr_new(addr);
-	c->created_ts = time(NULL);
-	c->last_access_ts = c->created_ts;
-
-	c->type = type;
-	c->disconnect_after_write = 0;
-
-	c->blueprint = NULL;
-	c->req_type = KOPOU_REQ_TYPE_NONE;
-	c->req_ready_to_process = 0;
-	c->req_parsing_pos = 0;
-	c->reqbuf_len = 0;
-	c->reqbuf_read_len = 0;
-	c->reqbuf = NULL;
-
-	c->resbuf_len = 0;
-	c->resbuf_written_pos = 0;
-	c->resbuf = NULL;
-
-	kopou.clients[fd] = c;
-}
-
-static void free_client(kclient_t *c)
-{
-	int fd = c->fd;
-	kstr_del(c->remoteaddr);
-	xfree(c->reqbuf);
-	xfree(c);
-	kopou.clients[fd] = NULL;
+	int i;
+	kbuffer_t *b, *tb;
+	knamevalue_t *h, *th;
 
 	eventtype_t evt = KEVENT_READABLE | KEVENT_WRITABLE;
-	kevent_del_event(kopou.loop, fd, evt);
-	tcp_close(fd);
-}
+	kevent_del_event(kopou.loop, c->fd, evt);
+	tcp_close(c->fd);
 
-static void reset_client(kclient_t *c)
+	if (c->req) {
+		khttp_request_t *r = (khttp_request_t*)(c->req);
+
+		b = r->buf;
+		while (b) {
+			tb = b->next;
+			xfree(b);
+			b = tb;
+		}
+
+		h = r->headers;
+		while (h) {
+			th = h->next;
+			xfree(h);
+			h = th;
+		}
+
+		for (i = 0; i < r->nsplitted_uri; i++)
+			kstr_del(r->splitted_uri[i]);
+
+		if (r->content_type) {
+			kstr_del(r->content_type);
+			r->content_type = NULL;
+		}
+
+		h = r->res->headers;
+		while (h) {
+			th = h->next;
+			xfree(h);
+			h = th;
+		}
+		xfree(r->res->buf);
+		xfree(r->res->cbuf);
+		xfree(r->res);
+		xfree(r);
+	}
+
+	kopou.conns[c->fd] = NULL;
+	kopou.nconns--;
+	xfree(c);
+};
+
+static void reset_http_request(kconnection_t *c)
 {
-	xfree(c->blueprint);
-	c->blueprint = NULL;
-	c->req_type = KOPOU_REQ_TYPE_NONE;
-	c->req_ready_to_process = 0;
-	c->req_parsing_pos = 0;
-	c->reqbuf_len = 0;
-	c->reqbuf_read_len = 0;
+	int i;
+	kbuffer_t *b, *tb;
+	knamevalue_t *h, *th;
 
-	xfree(c->reqbuf);
-	c->reqbuf = NULL;
+	khttp_request_t *r = (khttp_request_t*)(c->req);
 
-	c->resbuf_len = 0;
-	c->resbuf_written_pos = 0;
-	c->resbuf = NULL;
-}
+	b = r->buf;
+	while (b) {
+		tb = b->next;
+		xfree(b);
+		b = tb;
+	}
+	r->buf = NULL;
+
+	h = r->headers;
+	while (h) {
+		th = h->next;
+		xfree(h);
+		h = th;
+	}
+	r->headers = NULL;
+
+	for (i = 0; i < r->nsplitted_uri; i++)
+		kstr_del(r->splitted_uri[i]);
+	r->splitted_uri = NULL;
+	r->nsplitted_uri = 0;
+
+	r->cmd = NULL;
+	r->request_start = NULL;
+	r->request_end = NULL;
+	r->method_end = NULL;
+	r->schema_start = NULL;
+	r->schema_end = NULL;
+	r->host_start = NULL;
+	r->host_end = NULL;
+	r->port_end = NULL;
+	r->uri_start = NULL;
+	r->args_start = NULL;
+	r->uri_end = NULL;
+	r->uri_ext = NULL;
+	r->http_start = NULL;
+
+	r->header_start = NULL;
+	r->header_name_start = NULL;
+	r->header_name_end = NULL;
+	r->header_value_start = NULL;
+	r->header_value_end = NULL;
+	r->header_end = NULL;
+
+	r->content_length = 0;
+	if (r->content_type) {
+		kstr_del(r->content_type);
+		r->content_type = NULL;
+	}
+	r->_parsing_state = parsing_reqline_start;
+	r->body_end_index = 0;
+
+	r->connection_keepalive_timeout = 0;
+	r->http_version = 0;
+	r->body_start_index = 0;
+	r->major_version = 0;
+	r->minor_version = 0;
+	r->method = HTTP_METHOD_NOTSUPPORTED;
+	r->connection_keepalive = 0;
+	r->connection_close = 1;
+	r->transfer_encoding_chunked = 0;
+	r->complex_uri = 0;
+	r->quoted_uri = 0;
+	r->plus_in_uri = 0;
+	r->space_in_uri = 0;
+
+	r->res->status = 0;
+	h = r->res->headers;
+	while (h) {
+		th = h->next;
+		xfree(h);
+		h = th;
+	}
+	r->res->headers = NULL;
+
+	xfree(r->res->buf);
+	r->res->buf = NULL;
+	xfree(r->res->cbuf);
+	r->res->cbuf = NULL;
+	r->res->cbuf_len = 0;
+};
 
 static void http_response_handler(int fd, eventtype_t evtype)
 {
+	K_FORCE_USE(evtype);
+
+	klog(KOPOU_DEBUG, "write: %zd bytes", 0);
+	kconnection_t *c = kopou.conns[fd];
+
+	if (c->disconnect_after_reply) {
+		delete_http_connection(c);
+		return;
+	}
+
+	kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
+	reset_http_request(c);
+
+	/*
 	K_FORCE_USE(evtype);
 	kclient_t *c = kopou.clients[fd];
 
@@ -144,52 +270,144 @@ static void http_response_handler(int fd, eventtype_t evtype)
 
 	if (!clientdead && twritten > 0)
 		c->last_access_ts = kopou.current_time;
+	*/
 }
+
+
+static int http_prepare_to_reply(kconnection_t *c, eventtype_t evtype)
+{
+	if (!(evtype & KEVENT_WRITABLE)) {
+		if (kevent_add_event(kopou.loop, c->fd, KEVENT_WRITABLE,
+			NULL, http_response_handler, NULL) == KEVENT_ERR) {
+			klog(KOPOU_WARNING, "reply registration fail: %d, %s",
+							c->fd, strerror(errno));
+			return K_ERR;
+		}
+	}
+	return K_OK;
+}
+
+int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
+{
+	if (!strncasecmp(HTTP_PROXY_CONNECTION, h, hl)
+			|| !strncasecmp(HTTP_CONNECTION, h, hl)) {
+		if (!strncasecmp(HTTP_CONN_CLOSE, v, vl)) {
+			r->connection_close = 1;
+			return HTTP_OK;
+		} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, v, vl)) {
+			r->connection_keepalive = 1;
+			return HTTP_OK;
+		}
+	} else if (!strncasecmp(HTTP_CONTENT_LENGTH, h, hl)) {
+		errno = 0;
+		r->content_length = strtoul(v, NULL, 10);
+		if (errno) return HTTP_ERR;
+		return HTTP_OK;
+	} else if (!strncasecmp(HTTP_CONTENT_TYPE, h, hl)) {
+		r->content_type = _kstr_create(v, vl);
+		return HTTP_OK;
+	} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, h, hl)) {
+		int i = atoi(v);
+		if (i < 0 || i > 65536) return HTTP_ERR;
+		r->connection_keepalive_timeout = i;
+		return HTTP_OK;
+	} else if (!strncasecmp(HTTP_TRANSFER_ENCODING, h, hl)) {
+		if (!strncasecmp(HTTP_TE_CHUNKED, v, vl)) {
+			r->transfer_encoding_chunked = 1;
+			return HTTP_OK;
+		}
+	}
+	return HTTP_CONTINUE;
+}
+
+
 
 static void http_request_handler(int fd, eventtype_t evtype)
 {
-	ssize_t nread;
-	int tryagain;
+	ssize_t nr;
+	int tryagain, re;
+	khttp_request_t *r;
+	size_t rllen;
+	int hl, vl;
 
-	kclient_t *c = kopou.clients[fd];
+	kconnection_t *c = kopou.conns[fd];
+	r = (khttp_request_t*)c->req;
 
-	if (c->reqbuf)
-		c->reqbuf = xrealloc(c->reqbuf, c->reqbuf_len + REQ_BUFFER_SIZE);
-	else
-		c->reqbuf = xmalloc(REQ_BUFFER_SIZE);
+	kbuffer_t *b = r->buf;
+	if (b == NULL) {
+		b = xmalloc(sizeof(kbuffer_t));
+		b->start = xmalloc(HTTP_REQ_BUFFER_SIZE);
+		b->end = b->start + (b->size - 1);
+		b->pos = b->start;
+		b->last = NULL;
+		b->size = HTTP_REQ_BUFFER_SIZE;
+		b->next = NULL;
+		r->buf = b;
+	}
 
-	c->reqbuf_len += REQ_BUFFER_SIZE;
-	nread = tcp_read(fd, c->reqbuf + c->reqbuf_read_len,
-			c->reqbuf_len - c->reqbuf_read_len, &tryagain);
-	if (nread > 0) {
-		c->reqbuf_read_len += nread;
-		klog(KOPOU_DEBUG, "Read: %d:%zd:%d",fd, nread, tryagain);
-	} else {
-		if (!tryagain) {
-			klog(KOPOU_WARNING, "client disconnected: %d, %s",
-						fd, strerror(errno));
-			free_client(c);
-			kopou.nclients--;
-			return;
+	nr = tcp_read(fd, b->start, b->size, &tryagain);
+	if (nr > 0) {
+		klog(KOPOU_WARNING, "http request: %zd", nr);
+		b->last = b->start + (nr - 1);
+	} else if (!tryagain) {
+		klog(KOPOU_WARNING, "http connection disconnected: %d, %s",
+					fd, strerror(errno));
+		delete_http_connection(c);
+		return;
+	}
+
+	if (http_prepare_to_reply(c, evtype) == K_ERR) {
+		delete_http_connection(c);
+		return;
+	}
+
+	re = http_parse_request_line(c);
+	if (re == HTTP_ERR) {
+		c->disconnect_after_reply = 1;
+		return;
+	} else if (re == HTTP_CONTINUE) {
+		return;
+	}
+
+
+	if (r->_parsing_state == parsing_reqline_done) {
+		rllen = (r->args_start == NULL)
+				? ((r->uri_end) - (r->uri_start + 1))
+				: ((r->args_start -1) - (r->uri_start + 1));
+		kstr_t uri = _kstr_create(r->uri_start + 1, rllen);
+		r->nsplitted_uri = kstr_tok(uri, "/", &r->splitted_uri);
+		do {
+			re = http_parse_header_line(c);
+			if (re == HTTP_ERR) {
+				c->disconnect_after_reply = 1;
+				return;
+			} else if (re == HTTP_CONTINUE) {
+				return;
+			}
+
+			if (r->_parsing_state == parsing_header_line_done) {
+				hl = r->header_name_end - r->header_name_start;
+				if (hl > HTTP_HEADER_MAXLEN) {
+					// TODO error 413 response
+				}
+				vl = r->header_value_end - r->header_value_start;
+				if (http_set_system_header(r, r->header_name_start,
+						hl, r->header_value_start, vl) == HTTP_ERR) {
+					// TODO error badrequest response
+					c->disconnect_after_reply = 1;
+					return;
+				}
+			}
+		} while (r->_parsing_state != parsing_header_done);
+
+		if (r->_parsing_state == parsing_header_done) {
+			if (r->content_length > 0) {
+				r->body = r->header_end + 2;
+				//r->body_start_index = 0;
+			}
 		}
 	}
 
-	if (!(evtype & KEVENT_WRITABLE)) {
-		if (kevent_add_event(kopou.loop, fd, KEVENT_WRITABLE,
-			NULL, kclient_writer, NULL) == KEVENT_ERR) {
-			klog(KOPOU_WARNING, "reply registration fail: %d, %s"
-					,fd, strerror(errno));
-			free_client(c);
-			kopou.nclients--;
-			return;
-		}
-	}
-
-	if (parse_req(c) == PARSE_ERR) {
-		c->disconnect_after_write = 1;
-	} else if (c->req_ready_to_process) {
-		/* TODO call register cmd */
-	}
 }
 
 
@@ -240,11 +458,11 @@ void kopou_http_new_connection(int fd, eventtype_t evtype)
 		klog(KOPOU_DEBUG, "new http conn:(%d)", conn);
 		if (kevent_add_event(kopou.loop, conn, KEVENT_READABLE,
 			   http_request_handler, NULL, http_error_handler) == KEVENT_ERR) {
-			klog(KOPOU_WARNING, "new conn register fail, closing '%d'", conn);
+			klog(KOPOU_WARNING, "new conn register fail, closing %d: %s", conn, strerror(errno));
 			tcp_close(conn);
 			continue;
 		}
-		create_http_connection(conn);
+		kopou.conns[conn] = create_http_connection(conn);
 		kopou.nconns++;
 	}
 }
