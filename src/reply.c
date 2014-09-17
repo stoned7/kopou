@@ -1,38 +1,37 @@
 #include "kopou.h"
 
-void reply_err(kclient_t *c)
+int reply_400(kconnection_t *c)
 {
 	K_FORCE_USE(c);
-}
-void reply_err_protocol(kclient_t *c)
-{
-	K_FORCE_USE(c);
-}
-void reply_err_notfound(kclient_t *c)
-{
-	K_FORCE_USE(c);
-}
-void reply_err_unknownreq(kclient_t *c)
-{
-	K_FORCE_USE(c);
+	return K_OK;
 }
 
-void reply_ok(kclient_t *c)
+int reply_413(kconnection_t *c)
 {
 	K_FORCE_USE(c);
+	return K_OK;
 }
 
-void reply_ok_redirect(kclient_t *c)
+int reply_404(kconnection_t *c)
 {
 	K_FORCE_USE(c);
+	return K_OK;
 }
 
-void reply_ok_write(kclient_t *c)
+int reply_500(kconnection_t *c)
 {
 	K_FORCE_USE(c);
+	return K_OK;
 }
 
-void reply_ok_write_redirect(kclient_t *c)
+int reply_200(kconnection_t *c)
 {
 	K_FORCE_USE(c);
+	return K_OK;
+}
+
+int reply_300(kconnection_t *c)
+{
+	K_FORCE_USE(c);
+	return K_OK;
 }

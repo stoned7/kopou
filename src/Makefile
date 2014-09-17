@@ -1,28 +1,49 @@
 BINNAME=kopou-server
-CLIENTBINNAME=kopou-client
 CC=gcc
-CWARN=-Wall -W
+CWARN=-W
+CWARN+= -Waddress 
+CWARN+= -Warray-bounds  
+CWARN+= -Wchar-subscripts  
+CWARN+= -Wenum-compare
+CWARN+= -Wimplicit-int 
+CWARN+= -Wimplicit-function-declaration 
+CWARN+= -Wcomment  
+CWARN+= -Wformat
+CWARN+= -Wmain  
+CWARN+= -Wmissing-braces 
+CWARN+= -Wnonnull  
+CWARN+= -Wparentheses  
+#CWARN+= -Wpointer-sign  
+CWARN+= -Wreturn-type  
+CWARN+= -Wsequence-point  
+CWARN+= -Wstrict-aliasing  
+CWARN+= -Wstrict-overflow=1  
+#CWARN+= -Wswitch  
+CWARN+= -Wtrigraphs  
+CWARN+= -Wuninitialized  
+CWARN+= -Wunknown-pragmas  
+CWARN+= -Wunused-parameter
+CWARN+= -Wunused-function  
+CWARN+= -Wunused-label     
+CWARN+= -Wunused-value     
+CWARN+= -Wunused-variable  
+CWARN+= -Wvolatile-register-var  
+
 COPT=-O2
 CFLAGS=-pthread
 CDEBUG=-g -ggdb
-SRC=aarray.c kevent.c kopou.c kstring.c list.c parsing.c settings.c tcp.c xalloc.c networks.c reply.c database.c
+SRC=aarray.c kevent.c kopou.c kstring.c list.c http.c settings.c tcp.c xalloc.c networks.c reply.c database.c
 HDR=aarray.h config.h kevent.h kopou.h kstring.h list.h tcp.h xalloc.h
-CSRC=kopou_client.c tcp.c
-CHDR=kopou.h tcp.h
 
 all: $(BINNAME) 
 	mv -f $(BINNAME) ../
-	mv -f $(CLIENTBINNAME) ../
 
 $(BINNAME): $(SRC) $(HDR) $(CSRC) $(CHDR)
 	$(CC) $(CWARN) $(COPT) $(CFLAGS) $(SRC) -o $(BINNAME)
-	$(CC) $(CWARN) $(COPT) $(CFLAGS) $(CSRC) -o $(CLIENTBINNAME)
 
 debug: $(SRC) $(HDR) $(CSRC) $(CHDR)
 	$(CC) $(CWARN) $(CDEBUG) $(CFLAGS) $(SRC) -o $(BINNAME)
 	mv -f $(BINNAME) ../
-	$(CC) $(CWARN) $(CDEBUG) $(CFLAGS) $(CSRC) -o $(CLIENTBINNAME)
-	mv -f $(CLIENTBINNAME) ../
 
 .PHONY: install 
 install:
