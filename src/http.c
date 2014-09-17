@@ -735,7 +735,7 @@ int http_parse_contentlength_body(kconnection_t *c)
 int http_parse_chunked_body(kconnection_t *c)
 {
 	K_FORCE_USE(c);
-	/* not supported yet */
+	/*TODO  not supported yet */
 	return HTTP_ERR;
 }
 

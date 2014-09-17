@@ -14,7 +14,7 @@ static kconnection_t *http_create_connection(int fd)
 	khttp_request_t *r = (khttp_request_t*)(c->req);
 
 	r->cmd = NULL;
-	r->buf = NULL;
+	r->buf = r->curbuf = NULL;
 
 	r->request_start = NULL;
 	r->request_end = NULL;
@@ -50,7 +50,6 @@ static kconnection_t *http_create_connection(int fd)
 
 	r->connection_keepalive_timeout = 0;
 	r->http_version = 0;
-	r->body_start_index = 0;
 	r->major_version = 0;
 	r->minor_version = 0;
 	r->method = HTTP_METHOD_NOTSUPPORTED;
@@ -66,8 +65,9 @@ static kconnection_t *http_create_connection(int fd)
 	r->res->status = 0;
 	r->res->headers = NULL;
 	r->res->buf = NULL;
-	r->res->cbuf = NULL;
-	r->res->cbuf_len = 0;
+	r->res->curbuf = NULL;
+	r->res->err = NULL;
+	r->res->errflag = 0;
 
 	return c;
 }
@@ -114,7 +114,7 @@ static void http_delete_connection(kconnection_t *c)
 			h = th;
 		}
 		xfree(r->res->buf);
-		xfree(r->res->cbuf);
+		xfree(r->res->err);
 		xfree(r->res);
 		xfree(r);
 	}
@@ -138,7 +138,7 @@ static void http_reset_request(kconnection_t *c)
 		xfree(b);
 		b = tb;
 	}
-	r->buf = NULL;
+	r->buf = r->curbuf = NULL;
 
 	h = r->headers;
 	while (h) {
@@ -185,7 +185,6 @@ static void http_reset_request(kconnection_t *c)
 
 	r->connection_keepalive_timeout = 0;
 	r->http_version = 0;
-	r->body_start_index = 0;
 	r->major_version = 0;
 	r->minor_version = 0;
 	r->method = HTTP_METHOD_NOTSUPPORTED;
@@ -208,17 +207,32 @@ static void http_reset_request(kconnection_t *c)
 
 	xfree(r->res->buf);
 	r->res->buf = NULL;
-	xfree(r->res->cbuf);
-	r->res->cbuf = NULL;
-	r->res->cbuf_len = 0;
+	xfree(r->res->err);
+	r->res->err = NULL;
+	r->res->errflag = 0;
 };
 
 static void http_response_handler(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
 
-	klog(KOPOU_DEBUG, "write: %zd bytes", 0);
 	kconnection_t *c = kopou.conns[fd];
+
+	ssize_t nw;
+	size_t s;
+	int tryagain;
+	char b[] = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Length: 0\r\nCache-Control: no-cache, no-store, must-revalidate\r\n\r\n";
+	s = strlen(b);
+	nw = tcp_write(c->fd, b, s, &tryagain);
+	if (nw == TCP_ERR) {
+		if (!tryagain) {
+			klog(KOPOU_ERR, "reply err: %d, %s", c->fd,
+					strerror(errno));
+			http_delete_connection(c);
+			return;
+		}
+	}
+	klog(KOPOU_DEBUG, "write: %zd bytes", nw);
 
 	if (c->disconnect_after_reply) {
 		http_delete_connection(c);
@@ -324,36 +338,61 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 
 static void http_request_handler(int fd, eventtype_t evtype)
 {
-	ssize_t nr, rs;
-	int tryagain, re;
+	kbuffer_t *b, *nb;
+	kconnection_t *c;
 	khttp_request_t *r;
-	size_t rllen;
+	char *rb;
+	ssize_t nr;
+	size_t rllen, rs, f, t;
 	int hl, vl;
+	int tryagain, re;
 
-	kconnection_t *c = kopou.conns[fd];
+	c = kopou.conns[fd];
 	r = (khttp_request_t*)c->req;
 
-	kbuffer_t *b = r->buf;
+	b = r->buf;
 	if (b == NULL) {
 		b = xmalloc(sizeof(kbuffer_t));
 		b->start = xmalloc(HTTP_REQ_BUFFER_SIZE << 1);
-		b->size = HTTP_REQ_BUFFER_SIZE << 1;
-		b->end = b->start + (b->size - 1);
-		b->pos = b->start;
-		b->last = NULL;
+		b->end = b->start + ((HTTP_REQ_BUFFER_SIZE << 1) - 1);
+		b->pos = b->last = b->start;
 		b->next = NULL;
-		r->buf = b;
-		rs = b->size;
+		rs = HTTP_REQ_BUFFER_SIZE << 1;
+		rb = b->start;
+		r->buf = r->curbuf = b;
 	} else {
-		if (r->_parsing_state == parsing_header_done) {
+		if (r->_parsing_state >= parsing_header_done) {
+			b = r->curbuf;
+			f = (b->end - b->last) + 1;
+			t = (b->end - b->start) + 1;
+			if ((t - f) < (1024 << 2)) {
+				nb = xmalloc(sizeof(kbuffer_t));
+				nb->start = xmalloc(HTTP_REQ_BUFFER_SIZE);
+				nb->end = nb->start + HTTP_REQ_BUFFER_SIZE - 1;
+				nb->pos = nb->last = nb->start;
+				nb->next = NULL;
+				b->next = nb;
+				b = nb;
+				rb = nb->start;
+				rs = HTTP_REQ_BUFFER_SIZE;
+			} else {
+				rb = b->last + 1;
+				rs = t - f;
+			}
+		} else {
+			rb = b->last + 1;
+			rs = (b->end - b->last) + 1;
 		}
 	}
 
-	nr = tcp_read(fd, b->pos, rs, &tryagain);
+	printf("first real size: %d\n", HTTP_REQ_BUFFER_SIZE << 1);
+	printf("cal size: %zu\n", rs);
+
+	nr = tcp_read(fd, rb, rs, &tryagain);
 
 	if (nr > 0) {
-		klog(KOPOU_WARNING, "http request: %zd", nr);
-		b->last = b->pos + (nr - 1);
+		klog(KOPOU_DEBUG, "http request: %zd", nr);
+		r->curbuf->last += nr - 1;
 	} else if (!tryagain) {
 		klog(KOPOU_WARNING, "http connection disconnected: %d, %s",
 					fd, strerror(errno));
@@ -377,11 +416,14 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	//todo: total header size checks
 
 	if (r->_parsing_state == parsing_reqline_done) {
+
 		rllen = (r->args_start == NULL)
 				? ((r->uri_end) - (r->uri_start + 1))
 				: ((r->args_start -1) - (r->uri_start + 1));
 		kstr_t uri = _kstr_create(r->uri_start + 1, rllen);
 		r->nsplitted_uri = kstr_tok(uri, "/", &r->splitted_uri);
+		kstr_del(uri);
+
 		do {
 			re = http_parse_header_line(c);
 			if (re == HTTP_ERR) {
@@ -407,13 +449,20 @@ static void http_request_handler(int fd, eventtype_t evtype)
 		} while (r->_parsing_state != parsing_header_done);
 
 		if (r->_parsing_state == parsing_header_done) {
-			if (r->content_length > 0) {
+			r->_parsing_state = parsing_body_start;
+			if (r->transfer_encoding_chunked) {
+				re = http_parse_chunked_body(c);
+				if (re == HTTP_ERR) {
+					c->disconnect_after_reply = 1;
+					return;
+				} else if (re == HTTP_CONTINUE)
+					return;
+			} else if (r->content_length > 0) {
 				r->body = r->header_end + 2;
-				//r->body_start_index = 0;
 			}
+			//need to check the limit of body
 		}
 	}
-
 }
 
 

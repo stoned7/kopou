@@ -237,7 +237,6 @@ static int initialize_kopou_listener(void)
 	return K_OK;
 }
 
-
 int main(int argc, char **argv)
 {
 	if (argc != 2)

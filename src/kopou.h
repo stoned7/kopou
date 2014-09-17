@@ -53,13 +53,13 @@ void klog(int level, const char *fmt, ...);
 		exit(EXIT_FAILURE);\
 	} while (0)
 
-#define HTTP_REQ_BUFFER_SIZE (16 * 1024)
-#define HTTP_REQ_CONTENT_LENGTH_MAX (64 * (1024 * 1024))
+#define HTTP_REQ_BUFFER_SIZE (1024 << 4) /* 16K */
+#define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
 #define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
-#define HTTP_RES_WRITTEN_SIZE_MAX (16 * (1024 * 1024))
+#define HTTP_RES_WRITTEN_SIZE_MAX ((1024 << 10) << 4) /* 16 MB */
 
 #define HTTP_REQ_CONTINUE_IDLE_TIMEOUT (60)
-#define HTTP_DEFAULT_KEEPALIVE_TIMEOUT (10 * (60 * 60))
+#define HTTP_DEFAULT_KEEPALIVE_TIMEOUT (36000)
 
 #define CONFIG_LINE_LENGTH_MAX 1024
 
@@ -135,7 +135,9 @@ typedef enum {
 	parsing_header_line_almost_done,
 	parsing_header_line_done,
         parsing_header_almost_done,
-	parsing_header_done
+	parsing_header_done,
+	parsing_body_start,
+	parsing_body_done
 } parsing_state_t;
 
 
@@ -143,6 +145,7 @@ typedef struct {
 	void *val;
 	kstr_t content_type;
 	size_t size;
+	unsigned long long version;
 	unsigned type:4;
 	unsigned encoding:4;
 } kobj_t;
@@ -159,7 +162,6 @@ typedef struct kbuffer {
 	unsigned char *start;
 	unsigned char *end;
 	struct kbuffer *next;
-	size_t size;
 } kbuffer_t;
 
 typedef struct {
@@ -183,8 +185,9 @@ typedef struct {
 typedef struct {
 	knamevalue_t *headers;
 	kbuffer_t *buf;
-	char *cbuf;
-	size_t cbuf_len;
+	kbuffer_t *curbuf;
+	char *err;
+	unsigned errflag;
 	unsigned status;
 } khttp_response_t;
 
@@ -192,6 +195,7 @@ typedef struct {
 	kcommand_t *cmd;
 	khttp_response_t *res;
 	kbuffer_t *buf;
+	kbuffer_t *curbuf;
 
 	unsigned char *request_start;
 	unsigned char *request_end;
@@ -229,7 +233,6 @@ typedef struct {
 
 	unsigned connection_keepalive_timeout:16;
 	unsigned http_version:16;
-	unsigned body_start_index:1;
 	unsigned major_version:4;
 	unsigned minor_version:4;
 	unsigned method:4;
