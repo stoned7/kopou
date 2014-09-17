@@ -293,8 +293,8 @@ extern struct kopou_stats stats;
 int settings_from_file(const kstr_t filename);
 
 /* networks.c */
-void kopou_http_new_connection(int fd, eventtype_t evtype);
-void kopou_http_listener_error(int fd, eventtype_t evtype);
+void http_accept_new_connection(int fd, eventtype_t evtype);
+void http_listener_error(int fd, eventtype_t evtype);
 
 /* http.c */
 int http_parse_request_line(kconnection_t *conn);

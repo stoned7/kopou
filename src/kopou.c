@@ -229,8 +229,8 @@ static int initialize_kopou_listener(void)
 	}
 
 	if (kevent_add_event(kopou.loop, kopou.hlistener, KEVENT_READABLE,
-			kopou_http_new_connection, NULL,
-			kopou_http_listener_error) == KEVENT_ERR) {
+			http_accept_new_connection, NULL,
+			http_listener_error) == KEVENT_ERR) {
 		klog(KOPOU_ERR, "fail registering http listener to loop");
 		return K_ERR;
 	}

@@ -1,6 +1,6 @@
 #include "kopou.h"
 
-static kconnection_t *create_http_connection(int fd)
+static kconnection_t *http_create_connection(int fd)
 {
 	kconnection_t *c = xmalloc(sizeof(kconnection_t));
 
@@ -72,7 +72,7 @@ static kconnection_t *create_http_connection(int fd)
 	return c;
 }
 
-static void delete_http_connection(kconnection_t *c)
+static void http_delete_connection(kconnection_t *c)
 {
 	int i;
 	kbuffer_t *b, *tb;
@@ -124,7 +124,7 @@ static void delete_http_connection(kconnection_t *c)
 	xfree(c);
 };
 
-static void reset_http_request(kconnection_t *c)
+static void http_reset_request(kconnection_t *c)
 {
 	int i;
 	kbuffer_t *b, *tb;
@@ -221,12 +221,12 @@ static void http_response_handler(int fd, eventtype_t evtype)
 	kconnection_t *c = kopou.conns[fd];
 
 	if (c->disconnect_after_reply) {
-		delete_http_connection(c);
+		http_delete_connection(c);
 		return;
 	}
 
 	kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
-	reset_http_request(c);
+	http_reset_request(c);
 
 	/*
 	K_FORCE_USE(evtype);
@@ -324,7 +324,7 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 
 static void http_request_handler(int fd, eventtype_t evtype)
 {
-	ssize_t nr;
+	ssize_t nr, rs;
 	int tryagain, re;
 	khttp_request_t *r;
 	size_t rllen;
@@ -336,28 +336,33 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	kbuffer_t *b = r->buf;
 	if (b == NULL) {
 		b = xmalloc(sizeof(kbuffer_t));
-		b->start = xmalloc(HTTP_REQ_BUFFER_SIZE);
+		b->start = xmalloc(HTTP_REQ_BUFFER_SIZE << 1);
+		b->size = HTTP_REQ_BUFFER_SIZE << 1;
 		b->end = b->start + (b->size - 1);
 		b->pos = b->start;
 		b->last = NULL;
-		b->size = HTTP_REQ_BUFFER_SIZE;
 		b->next = NULL;
 		r->buf = b;
+		rs = b->size;
+	} else {
+		if (r->_parsing_state == parsing_header_done) {
+		}
 	}
 
-	nr = tcp_read(fd, b->start, b->size, &tryagain);
+	nr = tcp_read(fd, b->pos, rs, &tryagain);
+
 	if (nr > 0) {
 		klog(KOPOU_WARNING, "http request: %zd", nr);
-		b->last = b->start + (nr - 1);
+		b->last = b->pos + (nr - 1);
 	} else if (!tryagain) {
 		klog(KOPOU_WARNING, "http connection disconnected: %d, %s",
 					fd, strerror(errno));
-		delete_http_connection(c);
+		http_delete_connection(c);
 		return;
 	}
 
 	if (http_prepare_to_reply(c, evtype) == K_ERR) {
-		delete_http_connection(c);
+		http_delete_connection(c);
 		return;
 	}
 
@@ -369,6 +374,7 @@ static void http_request_handler(int fd, eventtype_t evtype)
 		return;
 	}
 
+	//todo: total header size checks
 
 	if (r->_parsing_state == parsing_reqline_done) {
 		rllen = (r->args_start == NULL)
@@ -415,11 +421,10 @@ static void http_error_handler(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
 	klog(KOPOU_ERR, "http err:%d, %s",fd, strerror(errno));
-	delete_http_connection(kopou.conns[fd]);
-	kopou.nconns--;
+	http_delete_connection(kopou.conns[fd]);
 }
 
-void kopou_http_new_connection(int fd, eventtype_t evtype)
+void http_accept_new_connection(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(evtype);
 
@@ -462,12 +467,12 @@ void kopou_http_new_connection(int fd, eventtype_t evtype)
 			tcp_close(conn);
 			continue;
 		}
-		kopou.conns[conn] = create_http_connection(conn);
+		kopou.conns[conn] = http_create_connection(conn);
 		kopou.nconns++;
 	}
 }
 
-void kopou_http_listener_error(int fd, eventtype_t evtype)
+void http_listener_error(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(fd);
 	K_FORCE_USE(evtype);
