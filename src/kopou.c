@@ -65,7 +65,7 @@ static void usages(char *name)
 
 static void version(void)
 {
-	fprintf(stdout, "\nkopou-server v%s %d bits, +cluster[%d vnodes]\n\n",
+	fprintf(stdout, "\nkopou v%s %d bits, -cluster[%d vnodes]\n\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 	exit(EXIT_SUCCESS);
 }
@@ -88,11 +88,9 @@ void klog(int level, const char *fmt, ...)
 		return;
 
 	char *levelstr[] = {"DEBUG", "INFO", "WARN", "ERR", "FATAL"};
-	time_t rawtime;
         struct tm *timeinfo;
         char time_buf[64];
-        rawtime = time(NULL);
-        timeinfo = localtime(&rawtime);
+        timeinfo = gmtime(&kopou.current_time);
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], kopou.pid,  msg);
 	fflush(fp);
@@ -198,6 +196,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
+
+	kopou.current_time = time(NULL);
 	/* check cli req continue timeout/idle time
 	 * clean them if required
 	 */

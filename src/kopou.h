@@ -315,4 +315,16 @@ int reply_300(kconnection_t *c);
 
 struct req_blueprint *get_req_blueprint(kobj_t *o);
 
+static inline void get_http_date(char *buf, size_t len)
+{
+	struct tm *tm = gmtime(&kopou.current_time);
+	strftime(buf, len, "Date: %a, %d %b %Y %H:%M:%S %Z", tm);
+}
+
+static inline void get_http_server_str(char *buf, size_t len)
+{
+	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]",
+			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
+}
+
 #endif

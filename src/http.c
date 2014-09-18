@@ -43,7 +43,7 @@ static uint32_t valid_uri[] = {
 int http_parse_request_line(kconnection_t *conn)
 {
 	unsigned char c, ch, *p, *m;
-	khttp_request_t *r = (khttp_request_t*)(conn->req);
+	khttp_request_t *r = conn->req;
 
 	parsing_state_t state = r->_parsing_state;
 	for (p = r->buf->pos; p <= r->buf->last; p++) {
@@ -556,7 +556,7 @@ int http_parse_header_line(kconnection_t *conn)
 {
 	unsigned char c, ch, *p;
 
-	khttp_request_t *r = (khttp_request_t*)(conn->req);
+	khttp_request_t *r = conn->req;
 
 	if (r->_parsing_state == parsing_reqline_done) {
 		r->header_start = r->buf->pos;

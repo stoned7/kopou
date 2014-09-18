@@ -11,7 +11,7 @@ static kconnection_t *http_create_connection(int fd)
 	c->disconnect_after_reply = 0;
 
 	c->req = xmalloc(sizeof(khttp_request_t));
-	khttp_request_t *r = (khttp_request_t*)(c->req);
+	khttp_request_t *r = c->req;
 
 	r->cmd = NULL;
 	r->buf = r->curbuf = NULL;
@@ -83,7 +83,7 @@ static void http_delete_connection(kconnection_t *c)
 	tcp_close(c->fd);
 
 	if (c->req) {
-		khttp_request_t *r = (khttp_request_t*)(c->req);
+		khttp_request_t *r = c->req;
 
 		b = r->buf;
 		while (b) {
@@ -130,7 +130,7 @@ static void http_reset_request(kconnection_t *c)
 	kbuffer_t *b, *tb;
 	knamevalue_t *h, *th;
 
-	khttp_request_t *r = (khttp_request_t*)(c->req);
+	khttp_request_t *r = c->req;
 
 	b = r->buf;
 	while (b) {
@@ -221,7 +221,15 @@ static void http_response_handler(int fd, eventtype_t evtype)
 	ssize_t nw;
 	size_t s;
 	int tryagain;
-	char b[] = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Length: 0\r\nCache-Control: no-cache, no-store, must-revalidate\r\n\r\n";
+	char f[5000] = "HTTP/1.1 200 OK\r\nConnection: keep-alive\r\nContent-Length: 0\r\nCache-Control: no-cache, no-store, must-revalidate\r\n%s\r\n%s\r\n\r\n";
+
+	char b[5000];
+	char date[256];
+	get_http_date(date, 256);
+	char server[256];
+	get_http_server_str(server, 256);
+
+	sprintf(b, f, date, server);
 	s = strlen(b);
 	nw = tcp_write(c->fd, b, s, &tryagain);
 	if (nw == TCP_ERR) {
@@ -348,7 +356,7 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	int tryagain, re;
 
 	c = kopou.conns[fd];
-	r = (khttp_request_t*)c->req;
+	r = c->req;
 
 	b = r->buf;
 	if (b == NULL) {

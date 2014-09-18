@@ -1,4 +1,4 @@
-BINNAME=kopou-server
+BINNAME=kopou
 CC=gcc
 CWARN=-W
 CWARN+= -Waddress 
