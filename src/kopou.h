@@ -183,12 +183,11 @@ typedef struct {
 } kcommand_t;
 
 typedef struct {
-	knamevalue_t *headers;
 	kbuffer_t *buf;
 	kbuffer_t *curbuf;
-	char *err;
-	unsigned errflag;
-	unsigned status;
+	kstr_t *headers;
+	int nheaders;
+	unsigned char flag;
 } khttp_response_t;
 
 typedef struct {
@@ -243,7 +242,6 @@ typedef struct {
 	unsigned quoted_uri:1;
 	unsigned plus_in_uri:1;
 	unsigned space_in_uri:1;
-
 } khttp_request_t;
 
 struct kopou_settings {
@@ -262,6 +260,7 @@ struct kopou_settings {
 	int background;
 	int verbosity;
 	int http_keepalive_timeout;
+	int http_close_connection_onerror;
 };
 
 struct kopou_stats {
@@ -306,24 +305,32 @@ int http_parse_contentlength_body(kconnection_t *c);
 int http_parse_chunked_body(kconnection_t *c);
 
 /* reply.c */
-int reply_400(kconnection_t *c);
-int reply_413(kconnection_t *c);
-int reply_404(kconnection_t *c);
-int reply_500(kconnection_t *c);
-int reply_200(kconnection_t *c);
-int reply_300(kconnection_t *c);
+void reply_400(kconnection_t *c); //bad request
+void reply_413(kconnection_t *c); //too large
+void reply_404(kconnection_t *c); //not found
+void reply_411(kconnection_t *c); //length required
+
+void reply_500(kconnection_t *c); //internal server err
+void reply_501(kconnection_t *c); //not implemented
+void reply_503_now(kbuffer_t *b); //service unavailable
+void reply_505(kconnection_t *c); //HTTP Version Not Supported
+
+void reply_200(kconnection_t *c); //ok
+void reply_201(kconnection_t *c); //created
+void reply_301(kconnection_t *c); //Move Permanently
+void reply_302(kconnection_t *c); //Found
 
 struct req_blueprint *get_req_blueprint(kobj_t *o);
 
 static inline void get_http_date(char *buf, size_t len)
 {
 	struct tm *tm = gmtime(&kopou.current_time);
-	strftime(buf, len, "Date: %a, %d %b %Y %H:%M:%S %Z", tm);
+	strftime(buf, len, "Date: %a, %d %b %Y %H:%M:%S %Z\r\n", tm);
 }
 
 static inline void get_http_server_str(char *buf, size_t len)
 {
-	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]",
+	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
 

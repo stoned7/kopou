@@ -41,6 +41,7 @@ static void initialize_globals(int bg)
 	settings.http_keepalive_timeout = HTTP_DEFAULT_KEEPALIVE_TIMEOUT;
 	settings.http_keepalive = 0;
 	settings.tcp_keepalive = 0;
+	settings.http_close_connection_onerror = 1;
 
 	stats.objects = 0;
 	stats.hits = 0;
