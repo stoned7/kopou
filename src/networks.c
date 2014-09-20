@@ -224,60 +224,24 @@ static void http_response_handler(int fd, eventtype_t evtype)
 		}
 	}
 	b->pos = b->pos + nw;
+	klog(KOPOU_DEBUG, "writen (%d): %zd:%zd bytes", fd, rs, nw);
 
-	klog(KOPOU_DEBUG, "write: %zd bytes", nw);
+	if (rs == (size_t)nw) {
 
-	if (c->disconnect_after_reply) {
-		http_delete_connection(c);
-		return;
-	}
-
-	kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
-	http_reset_request(c);
-
-	/*
-	K_FORCE_USE(evtype);
-	kclient_t *c = kopou.clients[fd];
-
-	ssize_t written, twritten = 0;
-	int tryagain, clientdead = 0;
-
-	while (c->resbuf_len > 0) {
-		written = tcp_write(fd, c->resbuf + c->resbuf_written_pos,
-			c->resbuf_len - c->resbuf_written_pos, &tryagain);
-		if (written == TCP_ERR) {
-			if (!tryagain) {
-				klog(KOPOU_ERR, "write err: %d, %s",
-						fd, strerror(errno));
-				free_client(c);
-				kopou.nclients--;
-				return;
-			}
+		if (b->next != NULL) {
+			r->res->curbuf = b->next;
+			return;
 		}
 
-		klog(KOPOU_DEBUG, "write: %zd bytes", written);
-		twritten += written;
-		c->resbuf_written_pos += written;
-
-		if (c->resbuf_len == c->resbuf_written_pos) {
-			klog(KOPOU_DEBUG, "write complete: %zu bytes", c->resbuf_len);
-			if (c->disconnect_after_write || !settings.client_keepalive) {
-				free_client(c);
-				kopou.nclients--;
-				clientdead = 1;
-			} else {
-				kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
-				reset_client(c);
-			}
-			break;
+		if (c->disconnect_after_reply) {
+			http_delete_connection(c);
+			return;
 		}
-		if (twritten > RES_WRITTEN_SIZE_MAX)
-			break;
+		kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
+		http_reset_request(c);
 	}
 
-	if (!clientdead && twritten > 0)
-		c->last_access_ts = kopou.current_time;
-	*/
+	c->last_interaction_ts = kopou.current_time;
 }
 
 
@@ -341,6 +305,8 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	int tryagain, re;
 
 	c = kopou.conns[fd];
+	c->last_interaction_ts = kopou.current_time;
+
 	r = c->req;
 
 	b = r->buf;
@@ -378,9 +344,6 @@ static void http_request_handler(int fd, eventtype_t evtype)
 		}
 	}
 
-	printf("first real size: %d\n", HTTP_REQ_BUFFER_SIZE << 1);
-	printf("cal size: %zu\n", rs);
-
 	nr = tcp_read(fd, rb, rs, &tryagain);
 
 	if (nr > 0) {
@@ -415,27 +378,27 @@ static void http_request_handler(int fd, eventtype_t evtype)
 				: ((r->args_start -1) - (r->uri_start + 1));
 		kstr_t uri = _kstr_create(r->uri_start + 1, rllen);
 		r->nsplitted_uri = kstr_tok(uri, "/", &r->splitted_uri);
+		klog(KOPOU_DEBUG, "uri: %s", uri);
 		kstr_del(uri);
 
 		do {
 			re = http_parse_header_line(c);
-			if (re == HTTP_ERR) {
-				c->disconnect_after_reply = 1;
+			if (re == HTTP_ERR)
 				return;
-			} else if (re == HTTP_CONTINUE) {
+			else if (re == HTTP_CONTINUE)
 				return;
-			}
+
 
 			if (r->_parsing_state == parsing_header_line_done) {
 				hl = r->header_name_end - r->header_name_start;
-				if (hl > HTTP_HEADER_MAXLEN) {
-					// TODO error 413 response
-				}
+
+				if (hl > HTTP_HEADER_MAXLEN)
+					reply_413(c);
+
 				vl = r->header_value_end - r->header_value_start;
 				if (http_set_system_header(r, r->header_name_start,
 						hl, r->header_value_start, vl) == HTTP_ERR) {
-					// TODO error badrequest response
-					c->disconnect_after_reply = 1;
+					reply_400(c);
 					return;
 				}
 			}
@@ -448,19 +411,20 @@ static void http_request_handler(int fd, eventtype_t evtype)
 
 			r->_parsing_state = parsing_body_start;
 			if (r->transfer_encoding_chunked) {
-				re = http_parse_chunked_body(c);
-				if (re == HTTP_ERR) {
-					c->disconnect_after_reply = 1;
+
+				if ((re = http_parse_chunked_body(c)) == HTTP_ERR)
 					return;
-				} else if (re == HTTP_CONTINUE)
+
+				if (re == HTTP_CONTINUE)
 					return;
+
 			} else if (r->content_length > 0) {
 				r->body = r->header_end + 2;
 			}
 			//need to check the limit of body
+			r->_parsing_state = parsing_done;
 
 		}
-
 		reply_200(c);
 	}
 }

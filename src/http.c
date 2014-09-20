@@ -56,7 +56,7 @@ int http_parse_request_line(kconnection_t *conn)
 				break;
 
 			if (ch < 'A' || ch > 'Z') {
-				/* TODO reply invalid method*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			state = parsing_reqline_method;
@@ -76,7 +76,7 @@ int http_parse_request_line(kconnection_t *conn)
 						r->method = HTTP_METHOD_PUT;
 						break;
 					} else {
-						/* TODO reply unsupport method*/
+						reply_405(conn);
 						return HTTP_ERR;
 					}
 				case 4:
@@ -87,7 +87,7 @@ int http_parse_request_line(kconnection_t *conn)
 						r->method = HTTP_METHOD_POST;
 						break;
 					} else {
-						/* TODO reply unsupport method*/
+						reply_405(conn);
 						return HTTP_ERR;
 					}
 				case 6:
@@ -96,11 +96,11 @@ int http_parse_request_line(kconnection_t *conn)
 						break;
 					}
 					else {
-						/* TODO reply unsupport method*/
+						reply_405(conn);
 						return HTTP_ERR;
 					}
 				default:
-					/* TODO reply unsupport method*/
+					reply_405(conn);
 					return HTTP_ERR;
 				}
 				state = parsing_reqline_spaces_before_uri;
@@ -108,7 +108,7 @@ int http_parse_request_line(kconnection_t *conn)
 			}
 
 			if (ch < 'A' || ch > 'Z') {
-				/* TODO reply invalid method*/
+				reply_405(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -131,7 +131,7 @@ int http_parse_request_line(kconnection_t *conn)
 			if (ch == ' ')
 				break;
 
-			/* TODO reply protocol error*/
+			reply_400(conn);
 			return HTTP_ERR;
 
 		case parsing_reqline_schema:
@@ -146,7 +146,7 @@ int http_parse_request_line(kconnection_t *conn)
 				break;
 			}
 
-			/* TODO reply protocol error*/
+			reply_400(conn);
 			return HTTP_ERR;
 
 		case parsing_reqline_schema_slash:
@@ -154,7 +154,8 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_schema_slash_slash;
 				break;
 			}
-			/* TODO reply protocol error*/
+
+			reply_400(conn);
 			return HTTP_ERR;
 
 		case parsing_reqline_schema_slash_slash:
@@ -162,7 +163,8 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_host_start;
 				break;
 			}
-			/* TODO reply protocol error*/
+
+			reply_400(conn);
 			return HTTP_ERR;
 
 		case parsing_reqline_host_start:
@@ -193,7 +195,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_host_http_09;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -214,7 +216,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_host_http_09;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -235,7 +237,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_http_H;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -285,7 +287,7 @@ int http_parse_request_line(kconnection_t *conn)
 				r->plus_in_uri = 1;
 				break;
 			case '\0':
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			default:
 				state = parsing_reqline_check_uri;
@@ -335,7 +337,7 @@ int http_parse_request_line(kconnection_t *conn)
 				r->plus_in_uri = 1;
 				break;
 			case '\0':
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -385,7 +387,7 @@ int http_parse_request_line(kconnection_t *conn)
 				r->complex_uri = 1;
 				break;
 			case '\0':
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -419,7 +421,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_http_HT;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -429,7 +431,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_http_HTT;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -439,7 +441,7 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_http_HTTP;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -450,14 +452,14 @@ int http_parse_request_line(kconnection_t *conn)
 				state = parsing_reqline_first_major_digit;
 				break;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
 
 		case parsing_reqline_first_major_digit:
 			if (ch < '1' || ch > '9') {
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			r->major_version = ch - '0';
@@ -471,7 +473,7 @@ int http_parse_request_line(kconnection_t *conn)
 			}
 
 			if (ch < '0' || ch > '9') {
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 
@@ -479,7 +481,7 @@ int http_parse_request_line(kconnection_t *conn)
 			break;
 		case parsing_reqline_first_minor_digit:
 			if (ch < '0' || ch > '9') {
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			r->minor_version = ch - '0';
@@ -501,7 +503,7 @@ int http_parse_request_line(kconnection_t *conn)
 			}
 
 			if (ch < '0' || ch > '9'){
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			r->minor_version = r->minor_version * 10 + ch - '0';
@@ -517,7 +519,7 @@ int http_parse_request_line(kconnection_t *conn)
 			case LF:
 				goto done;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -527,7 +529,7 @@ int http_parse_request_line(kconnection_t *conn)
 			case LF:
 				goto done;
 			default:
-				/* TODO reply protocol error*/
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 
@@ -546,7 +548,7 @@ done:
 	r->_parsing_state = parsing_reqline_done;
 	r->http_version = r->major_version * 1000 + r->minor_version;
 	if (r->http_version == HTTP_VERSION_9) {
-		/* TODO reply protocol error*/
+		reply_505(conn);
 		return HTTP_ERR;
 	}
 	return HTTP_OK;
@@ -590,7 +592,7 @@ int http_parse_header_line(kconnection_t *conn)
 				if (c) break;
 
 				if (ch == '\0') {
-					/* response err message */
+					reply_400(conn);
 					return HTTP_ERR;
 				}
 			}
@@ -619,7 +621,7 @@ int http_parse_header_line(kconnection_t *conn)
 				goto done;
 			}
 
-			/* response err message */
+			reply_400(conn);
 			return HTTP_ERR;
 
 		case parsing_header_space_before_value:
@@ -638,7 +640,7 @@ int http_parse_header_line(kconnection_t *conn)
 				state = parsing_header_line_done;
 				goto done;
 			case '\0':
-				/* response err message */
+				reply_400(conn);
 				return HTTP_ERR;
 			default:
 				r->header_value_start = p;
@@ -661,7 +663,7 @@ int http_parse_header_line(kconnection_t *conn)
 				state = parsing_header_line_done;
 				goto done;
 			case '\0':
-				/* response err message */
+				reply_400(conn);
 				return HTTP_ERR;
 			default:
 				break;
@@ -681,7 +683,7 @@ int http_parse_header_line(kconnection_t *conn)
 				state = parsing_header_line_done;
 				goto done;
 			case '\0':
-				/* response err message */
+				reply_400(conn);
 				return HTTP_ERR;
 			default:
 				state = parsing_header_value;
@@ -697,7 +699,7 @@ int http_parse_header_line(kconnection_t *conn)
 			case CR:
 				break;
 			default:
-				/* response err message */
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -708,7 +710,7 @@ int http_parse_header_line(kconnection_t *conn)
 				state = parsing_header_done;
 				goto done;
 			default:
-				/* response err message */
+				reply_400(conn);
 				return HTTP_ERR;
 			}
 			break;
@@ -734,8 +736,7 @@ int http_parse_contentlength_body(kconnection_t *c)
 
 int http_parse_chunked_body(kconnection_t *c)
 {
-	K_FORCE_USE(c);
-	/*TODO  not supported yet */
+	reply_400(c);
 	return HTTP_ERR;
 }
 

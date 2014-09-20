@@ -137,7 +137,8 @@ typedef enum {
         parsing_header_almost_done,
 	parsing_header_done,
 	parsing_body_start,
-	parsing_body_done
+	parsing_body_done,
+	parsing_done
 } parsing_state_t;
 
 
@@ -177,9 +178,9 @@ typedef struct {
 	kstr_t name;
 	void (*action)(kconnection_t *client);
 	int readonly;
+	unsigned argpos;
+	kstr_t template;
 	int argc;
-	int kindex;
-	int cindex;
 } kcommand_t;
 
 typedef struct {
@@ -309,6 +310,7 @@ void reply_400(kconnection_t *c); //bad request
 void reply_413(kconnection_t *c); //too large
 void reply_404(kconnection_t *c); //not found
 void reply_411(kconnection_t *c); //length required
+void reply_405(kconnection_t *c); //method not allowed
 
 void reply_500(kconnection_t *c); //internal server err
 void reply_501(kconnection_t *c); //not implemented
@@ -330,7 +332,7 @@ static inline void get_http_date(char *buf, size_t len)
 
 static inline void get_http_server_str(char *buf, size_t len)
 {
-	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n",
+	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n\r\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
 

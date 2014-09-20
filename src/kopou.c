@@ -39,7 +39,7 @@ static void initialize_globals(int bg)
 	settings.dbfile = kstr_new("./kopou-dev.kpu");
 	settings.http_max_ccur_conns = HTTP_DEFAULT_MAX_CONCURRENT_CONNS;
 	settings.http_keepalive_timeout = HTTP_DEFAULT_KEEPALIVE_TIMEOUT;
-	settings.http_keepalive = 0;
+	settings.http_keepalive = 1;
 	settings.tcp_keepalive = 0;
 	settings.http_close_connection_onerror = 1;
 
