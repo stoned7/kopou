@@ -13,7 +13,42 @@ struct kopou_server kopou;
 struct kopou_settings settings;
 struct kopou_stats stats;
 
-static void initialize_globals(int bg)
+static map_t *cmds_table;
+
+static void init_cmds_table(void)
+{
+	cmds_table = map_new(NULL);
+
+	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
+	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .action = NULL };
+
+	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
+	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL };
+	headbucket->next = getbucket;
+
+	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
+	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .action = NULL };
+	getbucket->next = putbucket;
+
+	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
+	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .action = NULL };
+	putbucket->next = delbucket;
+
+	delbucket->next = NULL;
+	map_add(cmds_table, kstr_new("bucket"), headbucket);
+
+	map_add(cmds_table, kstr_new("queue"), NULL);
+	map_add(cmds_table, kstr_new("cache"), NULL);
+	map_add(cmds_table, kstr_new("stats"), NULL);
+	map_add(cmds_table, kstr_new("cluster"), NULL);
+
+	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
+	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL,
+				.next = NULL };
+	map_add(cmds_table, kstr_new("favicon.ico"), favicon);
+}
+
+static void init_globals(int bg)
 {
 	kopou.pid = getpid();
 	kopou.current_time = time(NULL);
@@ -212,7 +247,7 @@ static void loop_error_handler(kevent_loop_t *ev, int eerrno)
 	kopou.shutdown = 1;
 }
 
-static int initialize_kopou_listener(void)
+static int init_kopou_listener(void)
 {
 	kopou.hlistener = tcp_create_listener(settings.address, settings.port,
 			KOPOU_TCP_NONBLOCK);
@@ -258,7 +293,7 @@ int main(int argc, char **argv)
 			if (strcmp(argv[2], "-b"))
 				usages(argv[0]);
 
-	initialize_globals(argc == 3);
+	init_globals(argc == 3);
 	if (settings_from_file(argv[1]) == K_ERR)
 		_kdie("fail reading config '%s'", argv[1]);
 	settings.configfile = kstr_new(argv[1]);
@@ -269,12 +304,12 @@ int main(int argc, char **argv)
 	if (setup_sighandler_asyncworkers() == K_ERR)
 		_kdie("fail to setup signal handlers");
 
-
+	init_cmds_table();
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
 	klog(KOPOU_WARNING, "starting kopou ...");
-	if (initialize_kopou_listener() == K_ERR)
+	if (init_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 
 	kevent_loop_start(kopou.loop);

@@ -1,39 +1,39 @@
 BINNAME=kopou
 CC=gcc
 CWARN=-W
-CWARN+= -Waddress 
-CWARN+= -Warray-bounds  
-CWARN+= -Wchar-subscripts  
-CWARN+= -Wenum-compare
-CWARN+= -Wimplicit-int 
-CWARN+= -Wimplicit-function-declaration 
-CWARN+= -Wcomment  
-CWARN+= -Wformat
-CWARN+= -Wmain  
-CWARN+= -Wmissing-braces 
-CWARN+= -Wnonnull  
-CWARN+= -Wparentheses  
-#CWARN+= -Wpointer-sign  
-CWARN+= -Wreturn-type  
-CWARN+= -Wsequence-point  
-CWARN+= -Wstrict-aliasing  
-CWARN+= -Wstrict-overflow=1  
-#CWARN+= -Wswitch  
-CWARN+= -Wtrigraphs  
-CWARN+= -Wuninitialized  
-CWARN+= -Wunknown-pragmas  
-CWARN+= -Wunused-parameter
-CWARN+= -Wunused-function  
-CWARN+= -Wunused-label     
-CWARN+= -Wunused-value     
-CWARN+= -Wunused-variable  
-CWARN+= -Wvolatile-register-var  
+CWARN+=-Waddress 
+CWARN+=-Warray-bounds  
+CWARN+=-Wchar-subscripts  
+CWARN+=-Wenum-compare
+CWARN+=-Wimplicit-int 
+CWARN+=-Wimplicit-function-declaration 
+CWARN+=-Wcomment  
+CWARN+=-Wformat
+CWARN+=-Wmain  
+CWARN+=-Wmissing-braces 
+CWARN+=-Wnonnull  
+CWARN+=-Wparentheses  
+#CWARN+=-Wpointer-sign  
+CWARN+=-Wreturn-type  
+CWARN+=-Wsequence-point  
+CWARN+=-Wstrict-aliasing  
+CWARN+=-Wstrict-overflow=1  
+#CWARN+=-Wswitch  
+CWARN+=-Wtrigraphs  
+CWARN+=-Wuninitialized  
+CWARN+=-Wunknown-pragmas  
+CWARN+=-Wunused-parameter
+CWARN+=-Wunused-function  
+CWARN+=-Wunused-label     
+CWARN+=-Wunused-value     
+CWARN+=-Wunused-variable  
+CWARN+=-Wvolatile-register-var  
 
 COPT=-O2
 CFLAGS=-pthread
 CDEBUG=-g -ggdb
-SRC=aarray.c kevent.c kopou.c kstring.c list.c http.c settings.c tcp.c xalloc.c networks.c reply.c database.c
-HDR=aarray.h config.h kevent.h kopou.h kstring.h list.h tcp.h xalloc.h
+SRC=aarray.c kevent.c kopou.c kstring.c list.c http.c settings.c tcp.c xalloc.c networks.c reply.c database.c map.c commands.c
+HDR=aarray.h config.h kevent.h kopou.h kstring.h list.h tcp.h xalloc.h map.h
 
 all: $(BINNAME) 
 	mv -f $(BINNAME) ../

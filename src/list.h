@@ -24,7 +24,7 @@ typedef struct list {
 	rem_element_handler reh;
 } list_t;
 
-list_t *list_new(rem_element_handler reh);
+list_t* list_new(rem_element_handler reh);
 void list_del(list_t *list);
 
 int list_add_next(list_t *list, list_element_t *element, const void *data);

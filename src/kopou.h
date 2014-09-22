@@ -12,6 +12,7 @@
 #include "list.h"
 #include "kevent.h"
 #include "tcp.h"
+#include "map.h"
 
 #define K_OK 0
 #define K_ERR -1
@@ -174,13 +175,14 @@ typedef struct {
 	unsigned disconnect_after_reply:1;
 } kconnection_t;
 
-typedef struct {
-	kstr_t name;
-	void (*action)(kconnection_t *client);
+typedef struct kcommand{
+	int method;
+	int (*action)(kconnection_t *c);
 	int readonly;
 	unsigned argpos;
 	kstr_t template;
 	int argc;
+	struct kcommand *next;
 } kcommand_t;
 
 typedef struct {
@@ -322,7 +324,8 @@ void reply_201(kconnection_t *c); //created
 void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
-struct req_blueprint *get_req_blueprint(kobj_t *o);
+/* commands.c */
+kcommand_t* get_mapped_cmd(kconnection_t *c);
 
 static inline void get_http_date(char *buf, size_t len)
 {
