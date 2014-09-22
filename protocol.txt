@@ -2,8 +2,12 @@
 key-value api:
 
 PUT http://127.0.0.1:7878/bucket/<key>
-PUT http://127.0.0.1:7878/bucket/<key>/<expired_time>  /* 20s || 10m || 5h || 38d */
 DELETE http://127.0.0.1:7878/bucket/<key>
+GET http://127.0.0.1:7878/bucket/<key>
+
+key-value with expired time:
+
+PUT http://127.0.0.1:7878/bucket/<key>/<expired_time>  /* 20s || 10m || 5h || 38d */
 POST http://127.0.0.1:7878/bucket/<key>/touch
 GET http://127.0.0.1:7878/bucket/<key>
 
