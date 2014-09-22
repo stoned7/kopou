@@ -1,40 +1,24 @@
-request:
 
-~3\r\n
-#4$SINS\r\n
-#10$abcdefghij\r\n
-#19$datadatata\r\n
+key-value api:
 
-~2\r\n
-#4$SGET\r\n
-#10$abcdefghij\r\n
+PUT http://127.0.0.1:7878/bucket/<key>
+PUT http://127.0.0.1:7878/bucket/<key>/<expired_time>  /* 20s || 10m || 5h || 38d */
+DELETE http://127.0.0.1:7878/bucket/<key>
+POST http://127.0.0.1:7878/bucket/<key>/touch
+GET http://127.0.0.1:7878/bucket/<key>
 
-~2\r\n
-#4$SDEL\r\n
-#10$abcdefghij\r\n
+lru cache api:
 
-^3\r\n
-#4$SINS\r\n
-#10$abcdefghij\r\n
-#19$datadatata\r\n
+PUT http://127.0.0.1:7878/cache/<key>
+DELETE http://127.0.0.1:7878/cache/<key>
+GET http://127.0.0.1:7878/cache/<key>
 
-response:
+kopou statistics:
 
-+0\r\n
+GET http://127.0.0.1:7878/stats
 
-+2\r\n
-#4$LOCA\r\n
-#16$192.168.3.199:56780\r\n
+kopou admin:
 
->4\r\n
-#4$RDIR\r\n
-#10$192.168.3.34:45678\r\n
-
--1\r\n
-#11$keyNotFound\r\n
-
-
-~3\r\n#4$SINS\r\n#8$sibsagar\r\n#21$Hey, I am from Assam.\r\n
-^3\r\n#4$SINS\r\n#8$sibsagar\r\n#21$Hey, I am from Assam.\r\n
-~2\r\n#4$SGET\r\n#10$abcdefghij\r\n
-
+PUT http://127.0.0.1:7878/cluster/127.0.0.1:7879
+DELETE http://127.0.0.1:7878/cluster/127.0.0.1:7879
+POST http://127.0.0.1:7878/shutdown
