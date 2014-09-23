@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -14,6 +15,12 @@ struct kopou_settings settings;
 struct kopou_stats stats;
 
 static map_t *cmds_table;
+
+kcommand_t *get_mapped_cmd(kconnection_t *c)
+{
+	K_FORCE_USE(c);
+	return NULL;
+}
 
 static void init_cmds_table(void)
 {
@@ -38,7 +45,6 @@ static void init_cmds_table(void)
 	map_add(cmds_table, kstr_new("bucket"), headbucket);
 
 	map_add(cmds_table, kstr_new("queue"), NULL);
-	map_add(cmds_table, kstr_new("cache"), NULL);
 	map_add(cmds_table, kstr_new("stats"), NULL);
 	map_add(cmds_table, kstr_new("cluster"), NULL);
 

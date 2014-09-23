@@ -5,11 +5,15 @@ PUT http://127.0.0.1:7878/bucket/<key>
 DELETE http://127.0.0.1:7878/bucket/<key>
 GET http://127.0.0.1:7878/bucket/<key>
 
-key-value with expired time:
+PUT http://127.0.0.1:7878/queue/<key> /* enqueue */
+POST http://127.0.0.1:7878/queue/<key> /* dequeue */
+GET http://127.0.0.1:7878/queue/<key> /* seek */
 
-PUT http://127.0.0.1:7878/bucket/<key>/<expired_time>  /* 20s || 10m || 5h || 38d */
-POST http://127.0.0.1:7878/bucket/<key>/touch
-GET http://127.0.0.1:7878/bucket/<key>
+session type api:
+
+PUT http://127.0.0.1:7878/session/<key>/<expired_time>  /* 20s || 10m || 5h || 38d */
+POST http://127.0.0.1:7878/session/<key>/touch
+GET http://127.0.0.1:7878/session/<key>
 
 lru cache api:
 
