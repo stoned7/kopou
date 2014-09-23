@@ -23,6 +23,8 @@ GET http://127.0.0.1:7878/stats
 
 kopou admin:
 
-PUT http://127.0.0.1:7878/cluster/127.0.0.1:7879
-DELETE http://127.0.0.1:7878/cluster/127.0.0.1:7879
+PUT http://127.0.0.1:7878/cluster/127.0.0.1/7879
+DELETE http://127.0.0.1:7878/cluster/127.0.0.1/7879
+GET http://127.0.0.1:7878/cluster/stats
+
 POST http://127.0.0.1:7878/shutdown
