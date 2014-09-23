@@ -8,7 +8,7 @@ debug:
 install:
 	cd src && $(MAKE) $@
 clean:
-	rm -rf *.o kopou-server
+	rm -rf *.o kopou
 	rm -rf *.log
 	rm -rf *.kpu
 tags:

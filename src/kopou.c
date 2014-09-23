@@ -13,7 +13,42 @@ struct kopou_server kopou;
 struct kopou_settings settings;
 struct kopou_stats stats;
 
-static void initialize_globals(int bg)
+static map_t *cmds_table;
+
+static void init_cmds_table(void)
+{
+	cmds_table = map_new(NULL);
+
+	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
+	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .action = NULL };
+
+	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
+	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL };
+	headbucket->next = getbucket;
+
+	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
+	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .action = NULL };
+	getbucket->next = putbucket;
+
+	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
+	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .action = NULL };
+	putbucket->next = delbucket;
+
+	delbucket->next = NULL;
+	map_add(cmds_table, kstr_new("bucket"), headbucket);
+
+	map_add(cmds_table, kstr_new("queue"), NULL);
+	map_add(cmds_table, kstr_new("cache"), NULL);
+	map_add(cmds_table, kstr_new("stats"), NULL);
+	map_add(cmds_table, kstr_new("cluster"), NULL);
+
+	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
+	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL,
+				.next = NULL };
+	map_add(cmds_table, kstr_new("favicon.ico"), favicon);
+}
+
+static void init_globals(int bg)
 {
 	kopou.pid = getpid();
 	kopou.current_time = time(NULL);
@@ -39,8 +74,9 @@ static void initialize_globals(int bg)
 	settings.dbfile = kstr_new("./kopou-dev.kpu");
 	settings.http_max_ccur_conns = HTTP_DEFAULT_MAX_CONCURRENT_CONNS;
 	settings.http_keepalive_timeout = HTTP_DEFAULT_KEEPALIVE_TIMEOUT;
-	settings.http_keepalive = 0;
+	settings.http_keepalive = 1;
 	settings.tcp_keepalive = 0;
+	settings.http_close_connection_onerror = 1;
 
 	stats.objects = 0;
 	stats.hits = 0;
@@ -65,7 +101,7 @@ static void usages(char *name)
 
 static void version(void)
 {
-	fprintf(stdout, "\nkopou-server v%s %d bits, +cluster[%d vnodes]\n\n",
+	fprintf(stdout, "\nkopou v%s %d bits, -cluster[%d vnodes]\n\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 	exit(EXIT_SUCCESS);
 }
@@ -88,11 +124,9 @@ void klog(int level, const char *fmt, ...)
 		return;
 
 	char *levelstr[] = {"DEBUG", "INFO", "WARN", "ERR", "FATAL"};
-	time_t rawtime;
         struct tm *timeinfo;
         char time_buf[64];
-        rawtime = time(NULL);
-        timeinfo = localtime(&rawtime);
+        timeinfo = gmtime(&kopou.current_time);
         strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", timeinfo);
 	fprintf(fp,"[%s][%s][%d]%s\n", time_buf, levelstr[level], kopou.pid,  msg);
 	fflush(fp);
@@ -198,6 +232,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
+
+	kopou.current_time = time(NULL);
 	/* check cli req continue timeout/idle time
 	 * clean them if required
 	 */
@@ -211,7 +247,7 @@ static void loop_error_handler(kevent_loop_t *ev, int eerrno)
 	kopou.shutdown = 1;
 }
 
-static int initialize_kopou_listener(void)
+static int init_kopou_listener(void)
 {
 	kopou.hlistener = tcp_create_listener(settings.address, settings.port,
 			KOPOU_TCP_NONBLOCK);
@@ -257,7 +293,7 @@ int main(int argc, char **argv)
 			if (strcmp(argv[2], "-b"))
 				usages(argv[0]);
 
-	initialize_globals(argc == 3);
+	init_globals(argc == 3);
 	if (settings_from_file(argv[1]) == K_ERR)
 		_kdie("fail reading config '%s'", argv[1]);
 	settings.configfile = kstr_new(argv[1]);
@@ -268,12 +304,12 @@ int main(int argc, char **argv)
 	if (setup_sighandler_asyncworkers() == K_ERR)
 		_kdie("fail to setup signal handlers");
 
-
+	init_cmds_table();
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
 	klog(KOPOU_WARNING, "starting kopou ...");
-	if (initialize_kopou_listener() == K_ERR)
+	if (init_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 
 	kevent_loop_start(kopou.loop);
