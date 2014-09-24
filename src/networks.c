@@ -425,7 +425,13 @@ static void http_request_handler(int fd, eventtype_t evtype)
 			r->_parsing_state = parsing_done;
 
 		}
-		reply_200(c);
+
+		kcommand_t *cmd = get_matched_cmd(c);
+		if (cmd) {
+			re = execute_command(c, cmd);
+			return;
+		}
+		reply_400(c);
 	}
 }
 
@@ -443,45 +449,61 @@ void http_accept_new_connection(int fd, eventtype_t evtype)
 
 	char remote_addr[ADDRESS_LENGTH];
 	int max, conn;
-	int tryagain;
+	int ta;
+	kbuffer_t *b = NULL;
 
 	max = KOPOU_HTTP_ACCEPT_MAX_CONN;
 	while (max--) {
 		conn = tcp_accept(fd, remote_addr, sizeof(remote_addr),
-					NULL, KOPOU_TCP_NONBLOCK, &tryagain);
+					NULL, KOPOU_TCP_NONBLOCK, &ta);
 		if (conn == TCP_ERR) {
-			if (tryagain) break;
+			if (ta) break;
 			klog(KOPOU_ERR, "http listener connection err: %d:%s",
-					tryagain, strerror(errno));
+					ta, strerror(errno));
 			break;
 		}
 
 		if (kopou.nconns > settings.http_max_ccur_conns) {
-			char msg[] = "HTTP/1.1 503 Service unavailable\r\nConnection: close\r\n";
-			tcp_write(conn, msg, sizeof(msg), &tryagain);
+			if (!b) {
+				b = xmalloc(sizeof(kbuffer_t));
+				b->start = xmalloc(HTTP_RES_HEADERS_SIZE);
+				b->end = b->start + HTTP_RES_HEADERS_SIZE - 1;
+				b->pos = b->last = b->start;
+				b->next = NULL;
+			}
+			reply_503_now(b);
+			tcp_write(conn, b->pos, (b->last - b->pos) + 1, &ta); /* dont respect fail tcp write */
 			klog(KOPOU_WARNING, "exceed max concurrent connection limits: %zu",
 								kopou.nconns);
 			tcp_close(conn);
 			continue;
 		}
 
+		klog(KOPOU_DEBUG, "new http conn:(%d)", conn);
+
 		if (settings.tcp_keepalive) {
 			if (tcp_set_keepalive(conn,
-				KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL) == TCP_ERR) {
-				klog(KOPOU_WARNING, "tcp keepalive setting err: %s",
+			KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL) == TCP_ERR) {
+				klog(KOPOU_ERR, "tcp keepalive setting err: %s",
 						strerror(errno));
 			}
 		}
 
-		klog(KOPOU_DEBUG, "new http conn:(%d)", conn);
 		if (kevent_add_event(kopou.loop, conn, KEVENT_READABLE,
-			   http_request_handler, NULL, http_error_handler) == KEVENT_ERR) {
-			klog(KOPOU_WARNING, "new conn register fail, closing %d: %s", conn, strerror(errno));
+		http_request_handler, NULL, http_error_handler) == KEVENT_ERR) {
+			klog(KOPOU_ERR, "new conn register fail, closing %d: %s"
+							,conn, strerror(errno));
 			tcp_close(conn);
 			continue;
 		}
+
 		kopou.conns[conn] = http_create_connection(conn);
 		kopou.nconns++;
+	}
+
+	if (b) {
+		xfree(b->start);
+		xfree(b);
 	}
 }
 

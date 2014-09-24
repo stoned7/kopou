@@ -1,20 +1,5 @@
 #include "kopou.h"
 
-#define CRLF "\r\n"
-
-#define HTTP_H_CONNECTION_KEEPALIVE "Connection: keep-alive\r\n"
-#define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
-#define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
-#define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-#define HTTP_H_CONTENTLENGTH "Content-Length: %zu\r\n"
-#define HTTP_H_CONTENTTYPE "Content-Type: %s\r\n"
-#define HTTP_H_ETAG "Etag: %s\r\n";
-
-#define HTTP_RES_HEADERS_SIZE (1024 << 1)
-#define HTTP_RES_CACHABLE 1 << 0
-#define HTTP_RES_CHUNKED 1 << 1
-#define HTTP_RES_LENGTH 1 << 2
-
 static void set_http_response_headers(kconnection_t *c, kbuffer_t *b)
 {
 	int i;
@@ -133,8 +118,10 @@ void reply_503_now(kbuffer_t *b)
 	char fh[128];
 	char *h;
 
-	char rl[] = "HTTP/1.1 503 Server Too Busy\r\n";
+	char rl[] = "HTTP/1.1 503 Server TooBusy\r\n";
 	size_t s = strlen(rl);
+
+	b->pos = b->last = b->start;
 
 	memcpy(b->pos, rl, s);
 	b->last = b->pos + s - 1;

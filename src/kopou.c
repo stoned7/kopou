@@ -16,9 +16,45 @@ struct kopou_stats stats;
 
 static map_t *cmds_table;
 
-kcommand_t *get_mapped_cmd(kconnection_t *c)
+static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
-	K_FORCE_USE(c);
+	int i, pi = 0;
+	char *tv, *sv;
+
+	if (r->nsplitted_uri != cmd->nptemplate)
+		return 0;
+
+	for (i = 0; i < cmd->nptemplate; i++) {
+		tv = cmd->ptemplate[i];
+		sv = r->splitted_uri[i];
+		if (!tv) {
+			if (pi > cmd->nparams)
+				return 0;
+			cmd->params[pi] = sv;
+			pi++;
+			continue;
+		}
+		if (strcasecmp(sv, tv))
+			return 0;
+	}
+	return 1;
+}
+
+kcommand_t *get_matched_cmd(kconnection_t *c)
+{
+	kcommand_t *cmd;
+	khttp_request_t *r;
+
+	r = c->req;
+	if (r->nsplitted_uri > 0) {
+		cmd = map_lookup(cmds_table, r->splitted_uri[0]);
+		while (cmd) {
+			if (r->method == cmd->method)
+				if (match_uri(cmd, r))
+					return cmd;
+			cmd = cmd->next;
+		}
+	}
 	return NULL;
 }
 
@@ -27,18 +63,18 @@ static void init_cmds_table(void)
 	cmds_table = map_new(NULL);
 
 	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
-	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .action = NULL };
+	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .execute = NULL };
 
 	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
-	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL };
+	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .execute = NULL };
 	headbucket->next = getbucket;
 
 	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
-	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .action = NULL };
+	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .execute = NULL };
 	getbucket->next = putbucket;
 
 	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
-	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .action = NULL };
+	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .execute = NULL };
 	putbucket->next = delbucket;
 
 	delbucket->next = NULL;
@@ -49,7 +85,7 @@ static void init_cmds_table(void)
 	map_add(cmds_table, kstr_new("cluster"), NULL);
 
 	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
-	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL,
+	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .execute = NULL,
 				.next = NULL };
 	map_add(cmds_table, kstr_new("favicon.ico"), favicon);
 }
@@ -314,7 +350,8 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
-	klog(KOPOU_WARNING, "starting kopou ...");
+	klog(KOPOU_WARNING, "starting kopou, http %s:%d", settings.address,
+			settings.port);
 	if (init_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 

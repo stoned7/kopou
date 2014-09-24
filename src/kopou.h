@@ -97,6 +97,20 @@ void klog(int level, const char *fmt, ...);
 #define LF '\n'
 #define CR '\r'
 
+#define HTTP_H_CONNECTION_KEEPALIVE "Connection: keep-alive\r\n"
+#define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
+#define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
+#define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
+#define HTTP_H_CONTENTLENGTH "Content-Length: %zu\r\n"
+#define HTTP_H_CONTENTTYPE "Content-Type: %s\r\n"
+#define HTTP_H_ETAG "Etag: %s\r\n";
+
+#define HTTP_RES_HEADERS_SIZE (1024 << 1)
+#define HTTP_RES_CACHABLE 1 << 0
+#define HTTP_RES_CHUNKED 1 << 1
+#define HTTP_RES_LENGTH 1 << 2
+
+
 #define CONNECTION_TYPE_HTTP 0
 #define CONNECTION_TYPE_KOPOU 1
 
@@ -175,14 +189,16 @@ typedef struct {
 	unsigned disconnect_after_reply:1;
 } kconnection_t;
 
-typedef struct kcommand{
-	int method;
-	int (*action)(kconnection_t *c);
-	int readonly;
-	unsigned argpos;
-	kstr_t template;
-	int argc;
+
+typedef struct kcommand {
 	struct kcommand *next;
+	int (*execute)(kconnection_t *c, struct kcommand *cmd);
+	kstr_t *ptemplate;
+	kstr_t *params;
+	unsigned nptemplate:16;
+	unsigned nparams:16;
+	unsigned method:16;
+	unsigned flag:16;
 } kcommand_t;
 
 typedef struct {
@@ -325,8 +341,9 @@ void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
 /* commands.c */
-kcommand_t* get_mapped_cmd(kconnection_t *c);
+int execute_command(kconnection_t *c, kcommand_t *cmd);
 
+kcommand_t* get_matched_cmd(kconnection_t *c);
 static inline void get_http_date(char *buf, size_t len)
 {
 	struct tm *tm = gmtime(&kopou.current_time);
