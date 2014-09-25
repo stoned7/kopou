@@ -72,8 +72,7 @@ int stats_get_cmd(kconnection_t *c)
 int favicon_get_cmd(kconnection_t *c)
 {
 	khttp_request_t *r = c->req;
-	if (r->cmd->flag & KCMD_RESPONSE_CACHABLE)
-		r->res->flag |= HTTP_RES_CACHABLE;
+	r->res->flag |= HTTP_RES_CACHABLE;
 	reply_200(c);
 	return K_OK;
 }
