@@ -10,6 +10,7 @@ typedef char* kstr_t;
 kstr_t kstr_new(char *str);
 kstr_t kstr_empty_new();
 void kstr_del(kstr_t str);
+kstr_t _kstr_create(char *str, size_t len);
 
 kstr_t kstr_dup(kstr_t str);
 kstr_t kstr_ncat_str(kstr_t kstr, const char *str, size_t len);

@@ -56,12 +56,6 @@ static void _config_from_line(kstr_t config)
 				err_msg = "port out of range";
 				goto err;
 			}
-		} else if (!strcasecmp(argv[0], "management_port") && argc == 2) {
-			settings.mport = atoi(argv[1]);
-			if (settings.mport < 1024 || settings.mport > 65535) {
-				err_msg = "management port out of range";
-				goto err;
-			}
 		} else if (!strcasecmp(argv[0], "verbosity") && argc == 2) {
 			kstr_tolower(argv[1]);
 			if (!strcasecmp(argv[1], "debug"))
@@ -82,27 +76,30 @@ static void _config_from_line(kstr_t config)
 			settings.dbdir = kstr_dup(argv[1]);
 		} else if (!strcasecmp(argv[0], "working_dir") && argc == 2) {
 			settings.workingdir = kstr_dup(argv[1]);
-		} else if (!strcasecmp(argv[0], "max_concurrent_clients")
+		} else if (!strcasecmp(argv[0], "http_max_concurrent_connections")
 								&& argc == 2) {
-			settings.max_ccur_clients = atoi(argv[1]);
-		} else if (!strcasecmp(argv[0], "client_keepalive_timeout")
+			settings.http_max_ccur_conns = atoi(argv[1]);
+		} else if (!strcasecmp(argv[0], "http_keepalive_timeout")
 								&& argc == 2) {
 			int to = atoi(argv[1]);
-			settings.client_keepalive_timeout = (to * (60 * 60));
-		} else if (!strcasecmp(argv[0], "client_keepalive")
+			settings.http_keepalive_timeout = (to * (60 * 60));
+		} else if (!strcasecmp(argv[0], "http_keepalive")
 								 && argc == 2) {
-			settings.client_keepalive = _yesnotoi(argv[1]);
-			if (settings.client_keepalive == -1) {
-				err_msg = "invalid client keepalive, yes or no only";
+			settings.http_keepalive = _yesnotoi(argv[1]);
+			if (settings.http_keepalive == -1) {
+				err_msg = "invalid http keepalive, yes or no only";
 				goto err;
 			}
-		} else if (!strcasecmp(argv[0], "client_tcpkeepalive")
+		} else if (!strcasecmp(argv[0], "tcp_keepalive")
 								&& argc == 2) {
-			settings.client_tcpkeepalive = _yesnotoi(argv[1]);
-			if (settings.client_tcpkeepalive == -1) {
+			settings.tcp_keepalive = _yesnotoi(argv[1]);
+			if (settings.tcp_keepalive == -1) {
 				err_msg = "invalid tcp keepalive, yes or no only";
 				goto err;
 			}
+		} else if (!strcasecmp(argv[0], "readonly_memory_threshold") &&
+					argc == 2) {
+			settings.readonly_memory_threshold = (size_t)atol(argv[1]);
 		}
 
 		for (j = 0; j < argc; j++) {
@@ -120,7 +117,7 @@ err:
 	exit(EXIT_FAILURE);
 }
 
-int set_config_from_file(const kstr_t filename)
+int settings_from_file(const kstr_t filename)
 {
 	char buf[CONFIG_LINE_LENGTH_MAX];
 	FILE *configfile;
