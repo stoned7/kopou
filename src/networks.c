@@ -426,9 +426,9 @@ static void http_request_handler(int fd, eventtype_t evtype)
 
 		}
 
-		kcommand_t *cmd = get_matched_cmd(c);
-		if (cmd) {
-			re = execute_command(c, cmd);
+		r->cmd = get_matched_cmd(c);
+		if (r->cmd) {
+			re = execute_command(c);
 			return;
 		}
 		reply_400(c);

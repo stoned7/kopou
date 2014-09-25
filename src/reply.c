@@ -77,9 +77,15 @@ void reply_400(kconnection_t *c)
 	reply_err(c, rl, strlen(rl));
 }
 
+void reply_403(kconnection_t *c)
+{
+	char rl[] = "HTTP/1.1 403 Forbidden NoPutRequest\r\n";
+	reply_err(c, rl, strlen(rl));
+}
+
 void reply_413(kconnection_t *c)
 {
-	char rl[] = "HTTP/1.1 413 Request Too Large\r\n";
+	char rl[] = "HTTP/1.1 413 Request TooLarge\r\n";
 	reply_err(c, rl, strlen(rl));
 }
 
@@ -91,7 +97,7 @@ void reply_404(kconnection_t *c)
 
 void reply_405(kconnection_t *c)
 {
-	char rl[] = "HTTP/1.1 404 Method Not Allowed\r\n";
+	char rl[] = "HTTP/1.1 405 Method NotAllowed\r\n";
 	reply_err(c, rl, strlen(rl));
 }
 

@@ -101,14 +101,13 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-#define HTTP_H_CONTENTLENGTH "Content-Length: %zu\r\n"
-#define HTTP_H_CONTENTTYPE "Content-Type: %s\r\n"
 #define HTTP_H_ETAG "Etag: %s\r\n";
 
 #define HTTP_RES_HEADERS_SIZE (1024 << 1)
-#define HTTP_RES_CACHABLE 1 << 0
-#define HTTP_RES_CHUNKED 1 << 1
-#define HTTP_RES_LENGTH 1 << 2
+#define HTTP_RES_CACHABLE (1 << 0)
+#define HTTP_RES_CHUNKED (1 << 1)
+#define HTTP_RES_LENGTH (1 << 2)
+#define HTTP_RES_BODY (1 << 3)
 
 
 #define CONNECTION_TYPE_HTTP 0
@@ -189,10 +188,19 @@ typedef struct {
 	unsigned disconnect_after_reply:1;
 } kconnection_t;
 
+enum {
+	KCMD_FLAG_NONE = 0,
+	KCMD_READ_ONLY = (1 << 0),
+	KCMD_WRITE_ONLY = (1 << 1),
+	KCMD_SKIP_REQUEST_BODY = (1 << 2),
+	KCMD_SKIP_REPLICA = (1 << 3),
+	KCMD_SKIP_PERSIST = (1 << 4),
+	KCMD_RESPONSE_CACHABLE = (1 << 5)
+};
 
 typedef struct kcommand {
 	struct kcommand *next;
-	int (*execute)(kconnection_t *c, struct kcommand *cmd);
+	int (*execute)(kconnection_t *c);
 	kstr_t *ptemplate;
 	kstr_t *params;
 	unsigned nptemplate:16;
@@ -271,6 +279,7 @@ struct kopou_settings {
 	kstr_t dbdir;
 	kstr_t dbfile;
 	kstr_t workingdir;
+	size_t readonly_memory_threshold;
 	int http_max_ccur_conns;
 	int tcp_keepalive;
 	int http_keepalive;
@@ -283,10 +292,10 @@ struct kopou_settings {
 };
 
 struct kopou_stats {
-	long long objects;
-	long long missed;
-	long long hits;
-	long long deleted;
+	unsigned long long objects;
+	unsigned long long missed;
+	unsigned long long hits;
+	unsigned long long deleted;
 };
 
 struct kopou_server {
@@ -329,6 +338,7 @@ void reply_413(kconnection_t *c); //too large
 void reply_404(kconnection_t *c); //not found
 void reply_411(kconnection_t *c); //length required
 void reply_405(kconnection_t *c); //method not allowed
+void reply_403(kconnection_t *c); //forbidden
 
 void reply_500(kconnection_t *c); //internal server err
 void reply_501(kconnection_t *c); //not implemented
@@ -341,7 +351,13 @@ void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
 /* commands.c */
-int execute_command(kconnection_t *c, kcommand_t *cmd);
+int execute_command(kconnection_t *c);
+int bucket_put_cmd(kconnection_t *c);
+int bucket_get_cmd(kconnection_t *c);
+int bucket_head_cmd(kconnection_t *c);
+int bucket_delete_cmd(kconnection_t *c);
+int favicon_get_cmd(kconnection_t *c);
+int stats_get_cmd(kconnection_t *c);
 
 kcommand_t* get_matched_cmd(kconnection_t *c);
 static inline void get_http_date(char *buf, size_t len)
@@ -355,5 +371,8 @@ static inline void get_http_server_str(char *buf, size_t len)
 	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n\r\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #endif

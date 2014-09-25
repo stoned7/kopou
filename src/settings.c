@@ -97,6 +97,9 @@ static void _config_from_line(kstr_t config)
 				err_msg = "invalid tcp keepalive, yes or no only";
 				goto err;
 			}
+		} else if (!strcasecmp(argv[0], "readonly_memory_threshold") &&
+					argc == 2) {
+			settings.readonly_memory_threshold = (size_t)atol(argv[1]);
 		}
 
 		for (j = 0; j < argc; j++) {
