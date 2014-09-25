@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -15,37 +16,127 @@ struct kopou_stats stats;
 
 static map_t *cmds_table;
 
+static int match_uri(kcommand_t *cmd, khttp_request_t *r)
+{
+	int i, pi = 0;
+	char *tv, *sv;
+
+	if (r->nsplitted_uri != cmd->nptemplate)
+		return 0;
+
+	for (i = 0; i < cmd->nptemplate; i++) {
+		tv = cmd->ptemplate[i];
+		sv = r->splitted_uri[i];
+		if (!tv) {
+			if (pi > cmd->nparams)
+				return 0;
+			cmd->params[pi] = sv;
+			pi++;
+			continue;
+		}
+		if (strcasecmp(sv, tv))
+			return 0;
+	}
+	return 1;
+}
+
+kcommand_t *get_matched_cmd(kconnection_t *c)
+{
+	kcommand_t *cmd;
+	khttp_request_t *r;
+
+	r = c->req;
+	if (r->nsplitted_uri > 0) {
+		cmd = map_lookup(cmds_table, r->splitted_uri[0]);
+		while (cmd) {
+			if (r->method == cmd->method)
+				if (match_uri(cmd, r))
+					return cmd;
+			cmd = cmd->next;
+		}
+	}
+	return NULL;
+}
+
 static void init_cmds_table(void)
 {
+	unsigned nt, p;
+
 	cmds_table = map_new(NULL);
 
+	/* bucket */
+	kstr_t bucket_name = kstr_new("bucket");
+	nt = 2;
+	p = 1;
 	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
-	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .action = NULL };
+	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD,
+		.execute = bucket_head_cmd, .nptemplate = nt, .nparams = p,
+		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
+			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
+	headbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	headbucket->ptemplate[0] = bucket_name;
+	headbucket->ptemplate[1] = NULL;
+	headbucket->params = xcalloc(p, sizeof(kstr_t));
 
 	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
-	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL };
+	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET,
+		.execute = bucket_get_cmd, .nptemplate = nt, .nparams = p,
+		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
+			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
+	getbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	getbucket->ptemplate[0] = bucket_name;
+	getbucket->ptemplate[1] = NULL;
+	getbucket->params = xcalloc(p, sizeof(kstr_t));
 	headbucket->next = getbucket;
 
 	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
-	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .action = NULL };
+	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT,
+		.execute = bucket_put_cmd, .nptemplate = nt, .nparams = p,
+		.flag = KCMD_WRITE_ONLY };
+	putbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	putbucket->ptemplate[0] = bucket_name;
+	putbucket->ptemplate[1] = NULL;
+	putbucket->params = xcalloc(p, sizeof(kstr_t));
 	getbucket->next = putbucket;
 
 	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
-	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .action = NULL };
+	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .execute =
+		bucket_delete_cmd, .nptemplate = nt, .nparams = p,
+		.flag = KCMD_WRITE_ONLY | KCMD_SKIP_REQUEST_BODY };
+	delbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	delbucket->ptemplate[0] = bucket_name;
+	delbucket->ptemplate[1] = NULL;
+	delbucket->params = xcalloc(p, sizeof(kstr_t));
 	putbucket->next = delbucket;
 
 	delbucket->next = NULL;
-	map_add(cmds_table, kstr_new("bucket"), headbucket);
+	map_add(cmds_table, bucket_name, headbucket);
 
-	map_add(cmds_table, kstr_new("queue"), NULL);
-	map_add(cmds_table, kstr_new("cache"), NULL);
-	map_add(cmds_table, kstr_new("stats"), NULL);
-	map_add(cmds_table, kstr_new("cluster"), NULL);
+	/* stats */
+	kstr_t stats_name = kstr_new("stats");
+	nt = 1;
+	p = 0;
+	kcommand_t *stats = xmalloc(sizeof(kcommand_t));
+	*stats = (kcommand_t){.method = HTTP_METHOD_GET, .next = NULL,
+		.execute = stats_get_cmd, .nptemplate = nt, .nparams = p,
+		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
+			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
+	stats->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	stats->ptemplate[0] = stats_name;
+	map_add(cmds_table, stats_name, stats);
 
+	/* favicon */
+	kstr_t favicon_name = kstr_new("favicon.ico");
+	nt = 1;
+	p = 0;
 	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
-	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .action = NULL,
-				.next = NULL };
-	map_add(cmds_table, kstr_new("favicon.ico"), favicon);
+	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .nparams = p,
+		.execute = favicon_get_cmd, .next = NULL, .nptemplate = nt,
+		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
+		KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST | KCMD_RESPONSE_CACHABLE };
+	favicon->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	favicon->ptemplate[0] = favicon_name;
+	map_add(cmds_table, favicon_name, favicon);
 }
 
 static void init_globals(int bg)
@@ -77,6 +168,7 @@ static void init_globals(int bg)
 	settings.http_keepalive = 1;
 	settings.tcp_keepalive = 0;
 	settings.http_close_connection_onerror = 1;
+	settings.readonly_memory_threshold = 1048576;
 
 	stats.objects = 0;
 	stats.hits = 0;
@@ -308,7 +400,8 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
-	klog(KOPOU_WARNING, "starting kopou ...");
+	klog(KOPOU_WARNING, "starting kopou, http %s:%d", settings.address,
+			settings.port);
 	if (init_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
 

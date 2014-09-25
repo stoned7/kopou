@@ -13,7 +13,7 @@ typedef struct {
 	void *val;
 } keyval_t;
 
-keyval_t* keyval_new(kstr_t key, void *val);
+keyval_t *keyval_new(kstr_t key, void *val);
 void keyval_del(keyval_t *kv);
 static inline int keyval_match(const char *key1, const char *key2)
 {
@@ -27,10 +27,10 @@ typedef struct {
 	size_t size;
 } map_t;
 
-map_t* map_new (map_delete_handler delete_handler);
+map_t *map_new (map_delete_handler delete_handler);
 void map_del(map_t *m);
 int map_add(map_t *m, kstr_t key, void *val);
-void* map_lookup(const map_t *m, const char *key);
+void *map_lookup(const map_t *m, const char *key);
 
 
 #endif

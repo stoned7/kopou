@@ -38,10 +38,10 @@ HDR=aarray.h config.h kevent.h kopou.h kstring.h list.h tcp.h xalloc.h map.h
 all: $(BINNAME) 
 	mv -f $(BINNAME) ../
 
-$(BINNAME): $(SRC) $(HDR) $(CSRC) $(CHDR)
+$(BINNAME): $(SRC) $(HDR)
 	$(CC) $(CWARN) $(COPT) $(CFLAGS) $(SRC) -o $(BINNAME)
 
-debug: $(SRC) $(HDR) $(CSRC) $(CHDR)
+debug: $(SRC) $(HDR)
 	$(CC) $(CWARN) $(CDEBUG) $(CFLAGS) $(SRC) -o $(BINNAME)
 	mv -f $(BINNAME) ../
 

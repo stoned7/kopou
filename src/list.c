@@ -1,6 +1,6 @@
 #include "list.h"
 
-list_t* list_new(rem_element_handler reh)
+list_t *list_new(rem_element_handler reh)
 {
         list_t *list = xmalloc(sizeof(*list));
         list->size = 0;
