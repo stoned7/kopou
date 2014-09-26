@@ -7,7 +7,6 @@ typedef struct {
 	unsigned long long version;
 } bucket_obj_t;
 
-
 int bucket_put_cmd(kconnection_t *c)
 {
 	reply_201(c);

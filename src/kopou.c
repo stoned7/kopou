@@ -15,6 +15,7 @@ struct kopou_settings settings;
 struct kopou_stats stats;
 
 kopou_db_t *bucketdb;
+kopou_db_t *versiondb;
 
 static map_t *cmds_table;
 
@@ -35,7 +36,9 @@ int generic_kc(const kstr_t key1, const kstr_t key2)
 
 static void init_dbs(void)
 {
-	bucketdb = kdb_new(generic_hf, generic_kc);
+	/* db size should be power of 2 always */
+	bucketdb = kdb_new(1024, 5, generic_hf, generic_kc);
+	versiondb = kdb_new(512, 5, generic_hf, generic_kc);
 }
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
@@ -133,6 +136,20 @@ static void init_cmds_table(void)
 
 	delbucket->next = NULL;
 	map_add(cmds_table, bucket_name, headbucket);
+
+	/* version */
+	kstr_t version_name = kstr_new("version");
+	nt=2;
+	p=1;
+	kcommand_t *putversion = xmalloc(sizeof(kcommand_t));
+	*putversion = (kcommand_t){.method = HTTP_METHOD_PUT, .execute = NULL,
+		.nptemplate = nt, nparams = p, .flag = KCMD_WRITEONLY };
+	putversion->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	putversion->ptemplate[0] = version_name;
+	putversion->ptemplate[1] = NULL;
+	putversion->params = xcalloc(p, sizeof(kstr_t));
+	putversion->nparams = p;
+
 
 	/* stats */
 	kstr_t stats_name = kstr_new("stats");

@@ -6,6 +6,7 @@
 #include <time.h>
 #include <stdarg.h>
 
+#include "common.h"
 #include "kstring.h"
 #include "xalloc.h"
 #include "aarray.h"
@@ -312,6 +313,7 @@ struct kopou_server {
 extern struct kopou_server kopou;
 extern struct kopou_settings settings;
 extern struct kopou_stats stats;
+kcommand_t* get_matched_cmd(kconnection_t *c);
 
 /* dbs */
 enum {
@@ -331,13 +333,26 @@ typedef struct kopou_db {
 	_kopou_db_t *main;
 } kopou_db_t;
 
-kopou_db_t *kdb_new(aarray_hashfunction hf, aarray_key_comparer kc);
+kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
+		_keycomparer kc);
 void kdb_del(kopou_db_t *db);
 void *kdb_get(kopou_db_t *db, kstr_t key);
-int kdb_add(kopou_db_t *db, kstr_t key, void *obj, void **oldobj);
+int kdb_add(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
 
+
+/* bucket.c */
 extern kopou_db_t *bucketdb;
+int execute_command(kconnection_t *c);
+int bucket_put_cmd(kconnection_t *c);
+int bucket_get_cmd(kconnection_t *c);
+int bucket_head_cmd(kconnection_t *c);
+int bucket_delete_cmd(kconnection_t *c);
+int favicon_get_cmd(kconnection_t *c);
+int stats_get_cmd(kconnection_t *c);
+
+/* version.c */
+extern kopou_db_t *versiondb;
 
 /* settings.c */
 int settings_from_file(const kstr_t filename);
@@ -370,16 +385,7 @@ void reply_201(kconnection_t *c); //created
 void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
-/* commands.c */
-int execute_command(kconnection_t *c);
-int bucket_put_cmd(kconnection_t *c);
-int bucket_get_cmd(kconnection_t *c);
-int bucket_head_cmd(kconnection_t *c);
-int bucket_delete_cmd(kconnection_t *c);
-int favicon_get_cmd(kconnection_t *c);
-int stats_get_cmd(kconnection_t *c);
 
-kcommand_t* get_matched_cmd(kconnection_t *c);
 static inline void get_http_date(char *buf, size_t len)
 {
 	struct tm *tm = gmtime(&kopou.current_time);
@@ -391,8 +397,5 @@ static inline void get_http_server_str(char *buf, size_t len)
 	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n\r\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
-
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #endif
