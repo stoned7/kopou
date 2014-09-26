@@ -14,7 +14,29 @@ struct kopou_server kopou;
 struct kopou_settings settings;
 struct kopou_stats stats;
 
+kopou_db_t *bucketdb;
+
 static map_t *cmds_table;
+
+uint32_t generic_hf(const kstr_t key)
+{
+	return jenkins_hash(key, kstr_len(key));
+}
+
+int generic_kc(const kstr_t key1, const kstr_t key2)
+{
+	size_t l1 = kstr_len(key1);
+	size_t l2 = kstr_len(key2);
+	if (l1 != l2)
+		return 0;
+
+	return !strcmp(key1, key2);
+}
+
+static void init_dbs(void)
+{
+	bucketdb = kdb_new(generic_hf, generic_kc);
+}
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
@@ -138,6 +160,19 @@ static void init_cmds_table(void)
 	favicon->ptemplate[0] = favicon_name;
 	map_add(cmds_table, favicon_name, favicon);
 }
+
+int execute_command(kconnection_t *c)
+{
+	khttp_request_t *r = c->req;
+	if (unlikely(settings.readonly_memory_threshold < xalloc_total_mem_used())) {
+		if (r->cmd->flag & KCMD_WRITE_ONLY) {
+			reply_403(c);
+			return K_OK;
+		}
+	}
+	return r->cmd->execute(c);
+}
+
 
 static void init_globals(int bg)
 {
@@ -400,6 +435,7 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
+	init_dbs();
 	klog(KOPOU_WARNING, "starting kopou, http %s:%d", settings.address,
 			settings.port);
 	if (init_kopou_listener() == K_ERR)

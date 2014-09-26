@@ -13,6 +13,7 @@
 #include "kevent.h"
 #include "tcp.h"
 #include "map.h"
+#include "jenkins_hash.h"
 
 #define K_OK 0
 #define K_ERR -1
@@ -102,6 +103,8 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
 #define HTTP_H_ETAG "Etag: %s\r\n";
+#define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
+#define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
 
 #define HTTP_RES_HEADERS_SIZE (1024 << 1)
 #define HTTP_RES_CACHABLE (1 << 0)
@@ -154,16 +157,6 @@ typedef enum {
 	parsing_body_done,
 	parsing_done
 } parsing_state_t;
-
-
-typedef struct {
-	void *val;
-	kstr_t content_type;
-	size_t size;
-	unsigned long long version;
-	unsigned type:4;
-	unsigned encoding:4;
-} kobj_t;
 
 typedef struct knamevalue {
 	kstr_t name;
@@ -315,9 +308,36 @@ struct kopou_server {
 	int ilistener;
 };
 
+/* server */
 extern struct kopou_server kopou;
 extern struct kopou_settings settings;
 extern struct kopou_stats stats;
+
+/* dbs */
+enum {
+	KDB_FLAG_NONE = 0,
+	KDB_FLAG_REHASHING = (1 << 0)
+};
+
+typedef struct _kopou_db {
+	aarray_t *primary;
+	aarray_t *secondary;
+	unsigned long rehashpos;
+	unsigned flag;
+	int loadfactor;
+} _kopou_db_t;
+
+typedef struct kopou_db {
+	_kopou_db_t *main;
+} kopou_db_t;
+
+kopou_db_t *kdb_new(aarray_hashfunction hf, aarray_key_comparer kc);
+void kdb_del(kopou_db_t *db);
+void *kdb_get(kopou_db_t *db, kstr_t key);
+int kdb_add(kopou_db_t *db, kstr_t key, void *obj, void **oldobj);
+int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
+
+extern kopou_db_t *bucketdb;
 
 /* settings.c */
 int settings_from_file(const kstr_t filename);

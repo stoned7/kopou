@@ -81,6 +81,7 @@ int aarray_add(aarray_t *aa, const kstr_t key, void *data)
 		ele = xmalloc(sizeof(aarray_element_t));
 		ele->data = data;
 		ele->key = key;
+		ele->hashkey = hkey;
 		ele->next = aa->buckets[index];
 		aa->buckets[index] = ele;
 		aa->nelement++;

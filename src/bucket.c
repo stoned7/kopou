@@ -1,19 +1,12 @@
 #include "kopou.h"
 
-#define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
-#define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
+typedef struct {
+	kstr_t content_type;
+	void *data;
+	size_t size;
+	unsigned long long version;
+} bucket_obj_t;
 
-int execute_command(kconnection_t *c)
-{
-	khttp_request_t *r = c->req;
-	if (unlikely(settings.readonly_memory_threshold < xalloc_total_mem_used())) {
-		if (r->cmd->flag & KCMD_WRITE_ONLY) {
-			reply_403(c);
-			return K_OK;
-		}
-	}
-	return r->cmd->execute(c);
-}
 
 int bucket_put_cmd(kconnection_t *c)
 {
