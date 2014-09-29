@@ -9,7 +9,6 @@
 
 #define AA_OK 0
 #define AA_ERR -1
-#define AA_UPDATE 1
 
 typedef uint32_t (*_hashfunction)(const kstr_t key);
 typedef int (*_keycomparer)(const kstr_t key1, const kstr_t key2);
@@ -20,7 +19,6 @@ typedef struct aarray_element {
 	void *data;
 	kstr_t key;
 } aarray_element_t;
-
 
 typedef struct aarray {
 	aarray_element_t **buckets;
@@ -36,7 +34,8 @@ aarray_t *aarray_new(unsigned long size, _hashfunction hf,
 			_keycomparer kc, aarray_del_handler adh);
 void aarray_del(aarray_t *aa);
 
-int aarray_add(aarray_t *aa, const kstr_t key, void *data, void **odata);
+int aarray_add(aarray_t *aa, const kstr_t key, void *data);
+int aarray_upd(aarray_t *aa, const kstr_t key, void *data, void **odata);
 int aarray_rem(aarray_t *aa, const kstr_t key, void **data);
 void *aarray_find(aarray_t *aa, const kstr_t key);
 
@@ -60,4 +59,9 @@ static inline kstr_t aarray_element_key(const aarray_element_t *ele)
 	return ele->key;
 }
 
+static inline void aarray_fdel(aarray_t *aa)
+{
+	xfree(aa->buckets);
+	xfree(aa);
+}
 #endif

@@ -316,29 +316,38 @@ extern struct kopou_stats stats;
 kcommand_t* get_matched_cmd(kconnection_t *c);
 
 /* dbs */
-enum {
-	KDB_FLAG_NONE = 0,
-	KDB_FLAG_REHASHING = (1 << 0)
-};
-
 typedef struct _kopou_db {
 	aarray_t *primary;
 	aarray_t *secondary;
-	unsigned long rehashpos;
-	unsigned flag;
+	long rehashpos;
 	int loadfactor;
 } _kopou_db_t;
 
 typedef struct kopou_db {
 	_kopou_db_t *main;
+	unsigned long dirty;
+	pid_t background;
+	int enable_resize;
 } kopou_db_t;
 
 kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
 		_keycomparer kc);
 void kdb_del(kopou_db_t *db);
 void *kdb_get(kopou_db_t *db, kstr_t key);
-int kdb_add(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
+int kdb_add(kopou_db_t *db, kstr_t key, void *obj);
+int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
+int kdb_try_expand(kopou_db_t *db);
+
+static inline void kdb_enable_resize(kopou_db_t *db)
+{
+	db->enable_resize = 1;
+}
+
+static inline void kdb_disable_resize(kopou_db_t *db)
+{
+	db->enable_resize = 0;
+}
 
 
 /* bucket.c */

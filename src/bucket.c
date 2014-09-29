@@ -4,8 +4,9 @@ typedef struct {
 	kstr_t content_type;
 	void *data;
 	size_t size;
-	unsigned long long version;
+	unsigned long kver;
 } bucket_obj_t;
+
 
 int bucket_put_cmd(kconnection_t *c)
 {

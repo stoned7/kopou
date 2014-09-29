@@ -34,6 +34,7 @@ void aarray_del(aarray_t *aa)
 	xfree(aa);
 }
 
+
 static aarray_element_t *_aarray_find(aarray_t *aa, const kstr_t key,
 		unsigned long index)
 {
@@ -65,7 +66,25 @@ void *aarray_find(aarray_t *aa, const kstr_t key)
 	return NULL;
 }
 
-int aarray_add(aarray_t *aa, const kstr_t key, void *data, void **odata)
+int aarray_add(aarray_t *aa, const kstr_t key, void *data)
+{
+	uint32_t hkey;
+	unsigned long index;
+	aarray_element_t *ele;
+
+	hkey = aa->hf(key);
+	index = hkey & aa->mask;
+
+	ele = xmalloc(sizeof(aarray_element_t));
+	ele->data = data;
+	ele->key = key;
+	ele->next = aa->buckets[index];
+	aa->buckets[index] = ele;
+	aa->nelement++;
+	return AA_OK;
+}
+
+int aarray_upd(aarray_t *aa, const kstr_t key, void *data, void **odata)
 {
 	uint32_t hkey;
 	unsigned long index;
@@ -75,18 +94,10 @@ int aarray_add(aarray_t *aa, const kstr_t key, void *data, void **odata)
 	index = hkey & aa->mask;
 
 	ele  = _aarray_find(aa, key, index);
-	if (unlikely(ele)) {
-		*odata = ele->data;
-		ele->data = data;
-		return AA_UPDATE;
-	}
+	if (ele == NULL) return AA_ERR;
 
-	ele = xmalloc(sizeof(aarray_element_t));
+	*odata = ele->data;
 	ele->data = data;
-	ele->key = key;
-	ele->next = aa->buckets[index];
-	aa->buckets[index] = ele;
-	aa->nelement++;
 	return AA_OK;
 }
 
