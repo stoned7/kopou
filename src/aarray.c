@@ -66,6 +66,18 @@ void *aarray_find(aarray_t *aa, const kstr_t key)
 	return NULL;
 }
 
+int aarray_exist(aarray_t *aa, const kstr_t key)
+{
+	unsigned long index;
+	uint32_t hkey;
+
+	hkey = aa->hf(key);
+	index = hkey & aa->mask;
+
+	aarray_element_t *ele = _aarray_find(aa, key, index);
+	return (ele != NULL);
+}
+
 int aarray_add(aarray_t *aa, const kstr_t key, void *data)
 {
 	uint32_t hkey;
@@ -121,6 +133,7 @@ int aarray_rem(aarray_t *aa, const kstr_t key, void **data)
 				prev->next = ele->next;
 				*data = ele->data;
 			}
+			kstr_del(ele->key);
 			xfree(ele);
 			aa->nelement--;
 			return AA_OK;

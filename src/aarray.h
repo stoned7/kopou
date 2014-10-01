@@ -38,6 +38,7 @@ int aarray_add(aarray_t *aa, const kstr_t key, void *data);
 int aarray_upd(aarray_t *aa, const kstr_t key, void *data, void **odata);
 int aarray_rem(aarray_t *aa, const kstr_t key, void **data);
 void *aarray_find(aarray_t *aa, const kstr_t key);
+int aarray_exist(aarray_t *aa, const kstr_t key);
 
 static inline unsigned long aarray_size(const aarray_t *aa)
 {

@@ -181,8 +181,9 @@ static void init_cmds_table(void)
 int execute_command(kconnection_t *c)
 {
 	khttp_request_t *r = c->req;
-	if (unlikely(settings.readonly_memory_threshold < xalloc_total_mem_used())) {
+	if (settings.readonly_memory_threshold < xalloc_total_mem_used()) {
 		if (r->cmd->flag & KCMD_WRITE_ONLY) {
+			//TODO: add headers
 			reply_403(c);
 			return K_OK;
 		}

@@ -227,7 +227,6 @@ static void http_response_handler(int fd, eventtype_t evtype)
 	klog(KOPOU_DEBUG, "writen (%d): %zd:%zd bytes", fd, rs, nw);
 
 	if (rs == (size_t)nw) {
-
 		if (b->next != NULL) {
 			r->res->curbuf = b->next;
 			return;

@@ -212,7 +212,6 @@ static void reply_success(kconnection_t *c, char *rl, int rllen)
 	}
 }
 
-/* TODO copy the contents */
 void reply_200(kconnection_t *c)
 {
 	char *rl = "HTTP/1.1 200 OK\r\n";

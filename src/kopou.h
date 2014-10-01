@@ -60,6 +60,7 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
 #define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
 #define HTTP_RES_WRITTEN_SIZE_MAX ((1024 << 10) << 4) /* 16 MB */
+#define HTTP_RES_HEADERS_SIZE (1024 << 1)
 
 #define HTTP_REQ_CONTINUE_IDLE_TIMEOUT (60)
 #define HTTP_DEFAULT_KEEPALIVE_TIMEOUT (36000)
@@ -103,11 +104,10 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-#define HTTP_H_ETAG "Etag: %s\r\n";
+#define HTTP_H_ETAG "Etag: %lu\r\n"
 #define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
 #define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
 
-#define HTTP_RES_HEADERS_SIZE (1024 << 1)
 #define HTTP_RES_CACHABLE (1 << 0)
 #define HTTP_RES_CHUNKED (1 << 1)
 #define HTTP_RES_LENGTH (1 << 2)
@@ -334,6 +334,7 @@ kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
 		_keycomparer kc);
 void kdb_del(kopou_db_t *db);
 void *kdb_get(kopou_db_t *db, kstr_t key);
+int kdb_exist(kopou_db_t *db, kstr_t key);
 int kdb_add(kopou_db_t *db, kstr_t key, void *obj);
 int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);

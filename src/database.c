@@ -45,6 +45,15 @@ void *kdb_get(kopou_db_t *db, kstr_t key)
 	return o;
 }
 
+int kdb_exist(kopou_db_t *db, kstr_t key)
+{
+	int r;
+	r = aarray_exist(db->main->primary, key);
+	if (!r && _rehashing(db))
+		r = aarray_exist(db->main->secondary, key);
+	return r;
+}
+
 int kdb_add(kopou_db_t *db, kstr_t key, void *obj)
 {
 	int r;
@@ -133,7 +142,7 @@ int kdb_try_expand(kopou_db_t *db)
 	if (f <= db->main->loadfactor) return K_AGAIN;
 
 	if (c >= LONG_MAX) n = LONG_MAX;
-	else n = c * 2;
+	else n = c << 1;
 
 	db->main->secondary = aarray_new(n, db->main->primary->hf,
 					db->main->primary->kc, NULL);
