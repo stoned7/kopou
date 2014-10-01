@@ -68,7 +68,7 @@ void klog(int level, const char *fmt, ...);
 #define CONFIG_LINE_LENGTH_MAX 1024
 
 #define HTTP_DEFAULT_MAX_CONCURRENT_CONNS 1024
-#define KOPOU_OWN_FDS (32 + (2 * VNODE_SIZE))
+#define KOPOU_OWN_FDS (32 + VNODE_SIZE)
 #define KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL 100
 
 #define HTTP_OK 0
@@ -104,7 +104,6 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-#define HTTP_H_ETAG "Etag: %lu\r\n"
 #define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
 #define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
 
@@ -183,7 +182,6 @@ typedef struct {
 } kconnection_t;
 
 enum {
-	KCMD_FLAG_NONE = 0,
 	KCMD_READ_ONLY = (1 << 0),
 	KCMD_WRITE_ONLY = (1 << 1),
 	KCMD_SKIP_REQUEST_BODY = (1 << 2),
