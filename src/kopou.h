@@ -56,9 +56,10 @@ void klog(int level, const char *fmt, ...);
 		exit(EXIT_FAILURE);\
 	} while (0)
 
+#define HTTP_REQ_HEADERS_BUFFER_SIZE (1024 << 2) /* 8K */
 #define HTTP_REQ_BUFFER_SIZE (1024 << 4) /* 16K */
 #define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
-#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
+//#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
 #define HTTP_RES_WRITTEN_SIZE_MAX ((1024 << 10) << 4) /* 16 MB */
 #define HTTP_RES_HEADERS_SIZE (1024 << 1)
 
@@ -105,6 +106,7 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
 #define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
+#define HTTP_H_CONTENTTYPE_FMT "Content-Type: %s\r\n"
 #define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
 
 #define HTTP_RES_CACHABLE (1 << 0)
@@ -154,6 +156,7 @@ typedef enum {
         parsing_header_almost_done,
 	parsing_header_done,
 	parsing_body_start,
+	parsing_body_continue,
 	parsing_body_done,
 	parsing_done
 } parsing_state_t;
@@ -236,13 +239,12 @@ typedef struct {
 	unsigned char *header_value_end;
 	unsigned char *header_end;
 
-	unsigned char *body;
-
 	kstr_t *splitted_uri;
 	knamevalue_t *headers;
 	int nsplitted_uri;
 
 	size_t content_length;
+	size_t rcontent_length;
 	kstr_t content_type;
 	parsing_state_t _parsing_state;
 

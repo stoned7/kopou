@@ -547,7 +547,8 @@ done:
 		r->request_end = p;
 	r->_parsing_state = parsing_reqline_done;
 	r->http_version = r->major_version * 1000 + r->minor_version;
-	if (r->http_version == HTTP_VERSION_9) {
+	if (r->http_version == HTTP_VERSION_9
+			|| r->http_version == HTTP_VERSION_10) {
 		reply_505(conn);
 		return HTTP_ERR;
 	}
@@ -715,8 +716,8 @@ int http_parse_header_line(kconnection_t *conn)
 			}
 			break;
 
-		} /* state switch */
-	} /* for end */
+		}
+	}
 
 	r->buf->pos = p;
 	r->_parsing_state = state;
@@ -730,12 +731,58 @@ done:
 
 int http_parse_contentlength_body(kconnection_t *c)
 {
-	K_FORCE_USE(c);
+	khttp_request_t *r = c->req;
+	kbuffer_t *b = r->curbuf;
+	size_t rs;
+
+	if (r->_parsing_state == parsing_header_done)
+		r->_parsing_state = parsing_body_start;
+
+	parsing_state_t state = r->_parsing_state;
+	switch (state) {
+	case parsing_body_start:
+		//r->buf->pos += 2;
+		rs = (r->buf->last - r->buf->pos) +1;
+		memcpy(b->pos, r->buf->pos, rs);
+		r->buf->pos = r->buf->pos + rs;
+		r->rcontent_length += rs;
+		if (r->rcontent_length >= r->content_length)
+			goto done;
+		r->_parsing_state = parsing_body_continue;
+		break;
+	case parsing_body_continue:
+		rs = (b->last - b->pos) +1;
+		r->rcontent_length += rs;
+		b->pos = b->pos + rs;
+		if (r->rcontent_length >= r->content_length)
+			goto done;
+		break;
+	case parsing_body_done:
+		goto done;
+	}
+
+	return HTTP_CONTINUE;
+done:
+	if (r->rcontent_length != r->content_length) {
+		reply_400(c);
+		return HTTP_ERR;
+	}
+
+	if (r->rcontent_length > HTTP_REQ_CONTENT_LENGTH_MAX) {
+		reply_413(c);
+		return HTTP_ERR;
+	}
+
+	r->_parsing_state = parsing_done;
 	return HTTP_OK;
 }
 
 int http_parse_chunked_body(kconnection_t *c)
 {
+	khttp_request_t *r;
+	r = c->req;
+	r->_parsing_state = parsing_body_start;
+
 	reply_400(c);
 	return HTTP_ERR;
 }

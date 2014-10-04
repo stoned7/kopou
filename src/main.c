@@ -391,8 +391,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 		kevent_loop_stop(ev);
 
 	database_cronjob();
-
 	kopou.current_time = time(NULL);
+
 	/* check cli req continue timeout/idle time
 	 * clean them if required
 	 */

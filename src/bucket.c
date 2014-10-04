@@ -21,25 +21,23 @@ int bucket_put_cmd(kconnection_t *c)
 	}
 
 	k = kstr_dup(r->cmd->params[0]);
-	if (kdb_exist(bucketdb, k)) {
-		o = xmalloc(sizeof(bucket_obj_t));
-		o->content_type = kstr_dup(r->content_type);
-		o->size =  r->content_length;
+	o = xmalloc(sizeof(bucket_obj_t));
+	o->content_type = kstr_dup(r->content_type);
+	o->size =  r->content_length;
+	o->data = xmalloc(o->size);
+	memcpy(o->data, r->buf->next, o->size);
 
+	if (kdb_exist(bucketdb, k)) {
 		re = kdb_upd(bucketdb, k, o, (void**)&oo);
 		if (re == K_OK) {
-			kstr_del(o->content_type);
-			xfree(o->data);
-			xfree(o);
+			kstr_del(oo->content_type);
+			xfree(oo->data);
+			xfree(oo);
 		}
 		kstr_del(k);
 		reply_200(c);
 		return K_OK;
 	}
-
-	o = xmalloc(sizeof(bucket_obj_t));
-	o->content_type = kstr_dup(r->content_type);
-	o->size =  r->content_length;
 
 	kdb_add(bucketdb, k, o);
 	reply_201(c);
@@ -59,7 +57,8 @@ int bucket_get_cmd(kconnection_t *c)
 	bucket_obj_t *o;
 	kbuffer_t *b;
 	char *p;
-	char cl[128];
+	char cl[64];
+	char ct[128];
 	size_t s, fs;
 
 	r = c->req;
@@ -71,10 +70,11 @@ int bucket_get_cmd(kconnection_t *c)
 		return K_OK;
 	}
 
-	snprintf(cl, 128, HTTP_H_CONTENTLENGTH_FMT, o->size);
+	snprintf(cl, 64, HTTP_H_CONTENTLENGTH_FMT, o->size);
+	snprintf(ct, 128, HTTP_H_CONTENTTYPE_FMT, o->content_type);
 
-	r->res->headers = xcalloc(3, sizeof(kstr_t));
-	r->res->headers[0] = kstr_dup(o->content_type);
+	r->res->headers = xcalloc(2, sizeof(kstr_t));
+	r->res->headers[0] = kstr_new(ct);
 	r->res->headers[1] = kstr_new(cl);
 	r->res->nheaders = 2;
 	r->res->flag |= HTTP_RES_LENGTH;
@@ -82,20 +82,23 @@ int bucket_get_cmd(kconnection_t *c)
 	reply_200(c);
 
 	b = r->res->buf->next;
+	if (b == NULL)
+		b = xmalloc(sizeof(kbuffer_t));
 	s = o->size;
 
 	if (s < HTTP_RES_WRITTEN_SIZE_MAX) {
 		b->start = xmalloc(s);
-		b->end = b->last = b->start + s - 1;
+		b->end = b->last = b->start + s -1;
 		b->pos = b->start;
 		b->next = NULL;
 		memcpy(b->start, o->data, s);
+		r->res->buf->next = b;
 	} else {
 		p = o->data;
 		fs = HTTP_RES_WRITTEN_SIZE_MAX;
 		do {
 			b->start = xmalloc(fs);
-			b->end = b->last = b->start + fs - 1;
+			b->end = b->last = b->start + fs -1;
 			b->pos =  b->start;
 			memcpy(b->start, p, fs);
 			p = p + fs;
