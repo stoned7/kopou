@@ -1,3 +1,8 @@
+/* 
+Inspired from nginx and respecting Nginx, Copyright (C) Igor Sysoev.
+Further changes and added new api are made by sujandutta@gmail.com.
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
