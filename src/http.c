@@ -1,7 +1,7 @@
 /* 
-Inspired from nginx and respecting Nginx, Copyright (C) Igor Sysoev.
-Further changes and added new api are made by sujandutta@gmail.com.
-*/
+ * Inspired from nginx and respecting Nginx, Copyright (C) Igor Sysoev.
+ * Further changes and new api are added by sujandutta@gmail.com.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
