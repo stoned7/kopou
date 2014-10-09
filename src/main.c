@@ -18,6 +18,17 @@ kopou_db_t *versiondb;
 
 static map_t *cmds_table;
 
+kbuffer_t *create_kbuffer(size_t size)
+{
+	kbuffer_t *b;
+	b = xmalloc(sizeof(*b));
+	b->start = xmalloc(size);
+	b->end = b->start + (size -1);
+	b->pos = b->last = b->start;
+	b->next = NULL;
+	return b;
+}
+
 uint32_t generic_hf(const kstr_t key)
 {
 	return jenkins_hash(key, kstr_len(key));

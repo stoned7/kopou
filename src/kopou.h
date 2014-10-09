@@ -208,6 +208,7 @@ typedef struct {
 	kbuffer_t *buf;
 	kbuffer_t *curbuf;
 	kstr_t *headers;
+	size_t size_hint;
 	int nheaders;
 	unsigned char flag;
 } khttp_response_t;
@@ -238,6 +239,7 @@ typedef struct {
 	unsigned char *header_value_start;
 	unsigned char *header_value_end;
 	unsigned char *header_end;
+	//unsigned char *body;
 
 	kstr_t *splitted_uri;
 	knamevalue_t *headers;
@@ -249,7 +251,7 @@ typedef struct {
 	parsing_state_t _parsing_state;
 
 	time_t timestamp;
-	unsigned body_end_index;
+	//unsigned body_end_index;
 
 	unsigned connection_keepalive_timeout:16;
 	unsigned http_version:16;
@@ -258,7 +260,6 @@ typedef struct {
 	unsigned method:4;
 	unsigned connection_keepalive:1;
 	unsigned connection_close:1;
-	unsigned transfer_encoding_chunked:1;
 	unsigned complex_uri:1;
 	unsigned quoted_uri:1;
 	unsigned plus_in_uri:1;
@@ -309,11 +310,12 @@ struct kopou_server {
 	int ilistener;
 };
 
-/* server */
+/* main */
 extern struct kopou_server kopou;
 extern struct kopou_settings settings;
 extern struct kopou_stats stats;
 kcommand_t* get_matched_cmd(kconnection_t *c);
+kbuffer_t *create_kbuffer(size_t size);
 
 /* dbs */
 typedef struct _kopou_db {
@@ -375,7 +377,6 @@ void http_listener_error(int fd, eventtype_t evtype);
 int http_parse_request_line(kconnection_t *conn);
 int http_parse_header_line(kconnection_t *conn);
 int http_parse_contentlength_body(kconnection_t *c);
-int http_parse_chunked_body(kconnection_t *c);
 
 /* reply.c */
 void reply_400(kconnection_t *c); //bad request

@@ -6,12 +6,15 @@ typedef struct {
 	size_t size;
 } bucket_obj_t;
 
+char stats_format[] = "{\"objects\":%d, \"missed\":%d, \"hits\":%zu, \"deleted\":%zu, \"memused\": \"%zu\"}";
 
 int bucket_put_cmd(kconnection_t *c)
 {
 	khttp_request_t *r;
 	kstr_t k;
 	bucket_obj_t *o, *oo;
+	kbuffer_t *b;
+	size_t s, cs;
 	int re;
 
 	r = c->req;
@@ -24,8 +27,20 @@ int bucket_put_cmd(kconnection_t *c)
 	o = xmalloc(sizeof(bucket_obj_t));
 	o->content_type = kstr_dup(r->content_type);
 	o->size =  r->content_length;
+
 	o->data = xmalloc(o->size);
-	memcpy(o->data, r->buf->next, o->size);
+
+	b = r->buf;
+	s = b->last - (r->header_end +2);
+	if (s) memcpy(o->data, r->header_end +2, s +1);
+
+	b = b->next;
+	if (b) {
+		cs = (b->last - b->start) +1;
+		memcpy(o->data + s, b->start, cs);
+		s += cs;
+		b = b->next;
+	}
 
 	if (kdb_exist(bucketdb, k)) {
 		re = kdb_upd(bucketdb, k, o, (void**)&oo);
@@ -46,20 +61,9 @@ int bucket_put_cmd(kconnection_t *c)
 
 int bucket_head_cmd(kconnection_t *c)
 {
-	reply_200(c);
-	return K_OK;
-}
-
-int bucket_get_cmd(kconnection_t *c)
-{
 	kstr_t k;
 	khttp_request_t *r;
 	bucket_obj_t *o;
-	kbuffer_t *b;
-	char *p;
-	char cl[64];
-	char ct[128];
-	size_t s, fs;
 
 	r = c->req;
 	k = r->cmd->params[0];
@@ -70,6 +74,28 @@ int bucket_get_cmd(kconnection_t *c)
 		return K_OK;
 	}
 
+	reply_200(c);
+	return K_OK;
+}
+
+int bucket_get_cmd(kconnection_t *c)
+{
+	kstr_t k;
+	khttp_request_t *r;
+	bucket_obj_t *o;
+	kbuffer_t *b;
+	char cl[64], ct[128];
+
+	r = c->req;
+	k = r->cmd->params[0];
+
+	o = kdb_get(bucketdb, k);
+	if (!o) {
+		reply_404(c);
+		return K_OK;
+	}
+
+	r->res->size_hint += o->size;
 	snprintf(cl, 64, HTTP_H_CONTENTLENGTH_FMT, o->size);
 	snprintf(ct, 128, HTTP_H_CONTENTTYPE_FMT, o->content_type);
 
@@ -81,31 +107,9 @@ int bucket_get_cmd(kconnection_t *c)
 
 	reply_200(c);
 
-	b = r->res->buf->next;
-	if (b == NULL)
-		b = xmalloc(sizeof(kbuffer_t));
-	s = o->size;
-
-	if (s < HTTP_RES_WRITTEN_SIZE_MAX) {
-		b->start = xmalloc(s);
-		b->end = b->last = b->start + s -1;
-		b->pos = b->start;
-		b->next = NULL;
-		memcpy(b->start, o->data, s);
-		r->res->buf->next = b;
-	} else {
-		p = o->data;
-		fs = HTTP_RES_WRITTEN_SIZE_MAX;
-		do {
-			b->start = xmalloc(fs);
-			b->end = b->last = b->start + fs -1;
-			b->pos =  b->start;
-			memcpy(b->start, p, fs);
-			p = p + fs;
-			fs = s - fs;
-			b = b->next = NULL;
-		} while (fs > 0);
-	}
+	b = r->res->curbuf;
+	memcpy(b->last +1, o->data, o->size);
+	b->last = b->last + o->size;
 
 	return K_OK;
 }
@@ -134,13 +138,17 @@ int bucket_delete_cmd(kconnection_t *c)
 
 int stats_get_cmd(kconnection_t *c)
 {
-	char statsstr[512], cl[128];
-	khttp_request_t *r = c->req;
+	khttp_request_t *r;
+	kbuffer_t *b;
 
-	static char stats_format[] = "{\"objects\":%d, \"missed\":%d, \"hits\":%zu, \"deleted\":%zu, \"memused\": \"%zu\"}";
+	char statsstr[512], cl[128];
+	size_t len;
+
+	r = c->req;
 	snprintf(statsstr, 512, stats_format, stats.objects, stats.missed,
 			stats.hits, stats.deleted, xalloc_total_mem_used());
-	size_t len = strlen(statsstr);
+	len = strlen(statsstr);
+	r->res->size_hint += len;
 
 	snprintf(cl, 128, HTTP_H_CONTENTLENGTH_FMT, len);
 	r->res->headers = xcalloc(2, sizeof(kstr_t));
@@ -151,8 +159,7 @@ int stats_get_cmd(kconnection_t *c)
 
 	reply_200(c);
 
-	/* assumtion, response headers and content fit in same buffer 2KB*/
-	kbuffer_t *b = r->res->curbuf;
+	b = r->res->curbuf;
 	memcpy(b->last + 1, statsstr, len);
 	b->last = b->last + len;
 

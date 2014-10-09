@@ -6,9 +6,9 @@ import requests
 def bucket_create(url):
 
     url = url + '/bucket/key1'
-    payload = '{"name": "sujan dutta"}'
+    payload = '{"name": "sujan dutta", "district": "sibsagar"}'
 
-    headers = {'Content-Type':'application/json'}
+    headers = {'Content-Type':'Application/Json'}
     headers['Content-Length'] = len(payload);
     headers['Connection'] = 'close';
 
@@ -31,7 +31,7 @@ def main(args):
         print 'command missing'
         sys.exit(-1)
 
-    baseurl = 'http://127.0.0.1:7878'
+    baseurl = 'http://192.168.3.77:7878'
 
     if args[0] == 'c':
         r = bucket_create(baseurl)
