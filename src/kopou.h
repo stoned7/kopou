@@ -56,7 +56,7 @@ void klog(int level, const char *fmt, ...);
 		exit(EXIT_FAILURE);\
 	} while (0)
 
-#define HTTP_REQ_HEADERS_BUFFER_SIZE (1024 << 2) /* 8K */
+#define HTTP_REQ_HEADERS_BUFFER_SIZE (1024 << 3) /* 8K */
 #define HTTP_REQ_BUFFER_SIZE (1024 << 4) /* 16K */
 #define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
 //#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)

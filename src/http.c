@@ -46,7 +46,7 @@ int http_parse_request_line(kconnection_t *conn)
 	khttp_request_t *r = conn->req;
 
 	parsing_state_t state = r->_parsing_state;
-	for (p = r->buf->pos; p <= r->buf->last; p++) {
+	for (p = r->buf->pos; p < r->buf->last; p++) {
 		ch = *p;
 		switch (state) {
 
@@ -542,7 +542,7 @@ int http_parse_request_line(kconnection_t *conn)
 	return HTTP_CONTINUE;
 
 done:
-	r->buf->pos = p + 1;
+	r->buf->pos = p +1;
 	if (r->request_end == NULL)
 		r->request_end = p;
 	r->_parsing_state = parsing_reqline_done;
@@ -570,7 +570,7 @@ int http_parse_header_line(kconnection_t *conn)
 
 	parsing_state_t state = r->_parsing_state;
 
-	for (p = r->buf->pos; p <= r->buf->last; p++) {
+	for (p = r->buf->pos; p < r->buf->last; p++) {
 		ch = *p;
 
 		switch (state) {
@@ -724,25 +724,28 @@ int http_parse_header_line(kconnection_t *conn)
 	return HTTP_CONTINUE;
 
 done:
-	r->buf->pos = p + 1;
+	r->buf->pos = p +1;
 	r->_parsing_state = state;
 	return HTTP_OK;
 }
 
 int http_parse_contentlength_body(kconnection_t *c)
 {
-	khttp_request_t *r = c->req;
-	kbuffer_t *b = r->curbuf;
+	khttp_request_t *r;
+	kbuffer_t *b;
 	size_t rs;
+
+	r = c->req;
+	b = r->curbuf;
 
 	if (r->_parsing_state == parsing_header_done)
 		r->_parsing_state = parsing_body_start;
 
-	rs = (b->last - b->pos) +1;
+	rs = b->last - b->pos;
 	r->rcontent_length += rs;
-	b->pos = b->pos + rs;
+	b->pos += rs;
 
-	if (r->rcontent_length < r->content_length)
+	if (r->rcontent_length  < r->content_length)
 		return HTTP_CONTINUE;
 
 	if (r->rcontent_length != r->content_length) {
@@ -758,3 +761,4 @@ int http_parse_contentlength_body(kconnection_t *c)
 	r->_parsing_state = parsing_done;
 	return HTTP_OK;
 }
+

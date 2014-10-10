@@ -32,11 +32,12 @@ int bucket_put_cmd(kconnection_t *c)
 
 	b = r->buf;
 	s = b->last - (r->header_end +2);
-	if (s) memcpy(o->data, r->header_end +2, s +1);
+	memcpy(o->data, (r->header_end +2), s);
 
 	b = b->next;
 	if (b) {
-		cs = (b->last - b->start) +1;
+		printf("put\n");
+		cs = (b->last - b->start);
 		memcpy(o->data + s, b->start, cs);
 		s += cs;
 		b = b->next;
@@ -108,8 +109,8 @@ int bucket_get_cmd(kconnection_t *c)
 	reply_200(c);
 
 	b = r->res->curbuf;
-	memcpy(b->last +1, o->data, o->size);
-	b->last = b->last + o->size;
+	memcpy(b->last, o->data, o->size);
+	b->last += o->size;
 
 	return K_OK;
 }
@@ -160,7 +161,7 @@ int stats_get_cmd(kconnection_t *c)
 	reply_200(c);
 
 	b = r->res->curbuf;
-	memcpy(b->last + 1, statsstr, len);
+	memcpy(b->last, statsstr, len);
 	b->last = b->last + len;
 
 	return K_OK;

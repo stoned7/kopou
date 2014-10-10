@@ -12,19 +12,19 @@ static void set_http_response_headers(kconnection_t *c, kbuffer_t *b)
 	for (i = 0; i < r->res->nheaders; i++) {
 		h = r->res->headers[i];
 		s = kstr_len(h);
-		memcpy(b->last +1, h, s);
-		b->last = b->last + s;
+		memcpy(b->last, h, s);
+		b->last += s;
 	}
 
 	get_http_date(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last +1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	get_http_server_str(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last +1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 }
 
 static void reply_err(kconnection_t *c, char *rl, int rllen)
@@ -43,7 +43,7 @@ static void reply_err(kconnection_t *c, char *rl, int rllen)
 	b->pos = b->last = b->start;
 
 	memcpy(b->start, rl, rllen);
-	b->last = b->start + rllen -1;
+	b->last = b->start + rllen;
 
 	if (settings.http_close_connection_onerror
 		|| !settings.http_keepalive
@@ -56,17 +56,17 @@ static void reply_err(kconnection_t *c, char *rl, int rllen)
 		h = HTTP_H_CONNECTION_KEEPALIVE;
 
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	h = HTTP_H_NO_CACHE;
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	h = "Content-Length: 0\r\n";
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	set_http_response_headers(c, b);
@@ -131,32 +131,32 @@ void reply_503_now(kbuffer_t *b)
 	b->pos = b->last = b->start;
 
 	memcpy(b->start, rl, s);
-	b->last = b->start + s -1;
+	b->last = b->start + s;
 
 	h = HTTP_H_CONNECTION_CLOSE;
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	h = HTTP_H_NO_CACHE;
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	get_http_date(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last +1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	get_http_server_str(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last +1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	h = "Content-Length: 0\r\n\r\n";
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 }
 
 void reply_505(kconnection_t *c)
@@ -182,7 +182,7 @@ static void reply_success(kconnection_t *c, char *rl, int rllen)
 	}
 
 	memcpy(b->start, rl, rllen);
-	b->last = b->start + rllen -1;
+	b->last = b->start + rllen;
 
 	if (settings.http_keepalive && r->connection_keepalive)
 		h = HTTP_H_CONNECTION_KEEPALIVE;
@@ -191,22 +191,22 @@ static void reply_success(kconnection_t *c, char *rl, int rllen)
 		c->disconnect_after_reply = 1;
 	}
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	if (r->res->flag & HTTP_RES_CACHABLE)
 		h = HTTP_H_YES_CACHE;
 	else
 		h = HTTP_H_NO_CACHE;
 	s = strlen(h);
-	memcpy(b->last +1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	if (!(r->res->flag & HTTP_RES_LENGTH)) {
 		h = "Content-Length: 0\r\n";
 		s = strlen(h);
-		memcpy(b->last +1, h, s);
-		b->last = b->last + s;
+		memcpy(b->last, h, s);
+		b->last += s;
 	}
 
 	set_http_response_headers(c, b);

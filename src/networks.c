@@ -214,9 +214,11 @@ static void http_response_handler(int fd, eventtype_t evtype)
 	r = c->req;
 
 	b = r->res->curbuf;
+	if (!b) return;
+
 	rb = b->pos;
 
-	rem = (b->last - b->pos) +1;
+	rem = b->last - b->pos;
 	rs = rem > HTTP_RES_WRITTEN_SIZE_MAX ? HTTP_RES_WRITTEN_SIZE_MAX : rem;
 
 	nw = tcp_write(c->fd, rb, rs, &tryagain);
@@ -228,7 +230,7 @@ static void http_response_handler(int fd, eventtype_t evtype)
 			return;
 		}
 	}
-	b->pos = b->pos + nw;
+	b->pos += nw;
 
 	if (rem == (size_t)nw) {
 
@@ -293,6 +295,7 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 	return HTTP_CONTINUE;
 }
 
+static int i;
 static void http_request_handler(int fd, eventtype_t evtype)
 {
 	kbuffer_t *b, *nb;
@@ -300,7 +303,7 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	khttp_request_t *r;
 	char *rb;
 	ssize_t nr;
-	size_t rllen, rs, f, rem;
+	size_t rllen, rs, f, rem = 0;
 	int hl, vl;
 	int tryagain, re;
 
@@ -318,10 +321,9 @@ static void http_request_handler(int fd, eventtype_t evtype)
 	} else if (r->_parsing_state >= parsing_header_done) {
 
 		rem = r->content_length - r->rcontent_length;
-		f = b->end - b->last;
-
+		f = b->end - (b->last -1);
 		if (f >= rem) {
-			rb = b->last +1;
+			rb = b->last;
 		} else {
 			nb = create_kbuffer(rem);
 			b->next = r->curbuf = nb;
@@ -329,19 +331,18 @@ static void http_request_handler(int fd, eventtype_t evtype)
 			rb = b->start;
 		}
 		rs = rem > HTTP_REQ_BUFFER_SIZE ? HTTP_REQ_BUFFER_SIZE : rem;
-
 	} else {
-		rs = b->end - b->last;
+		rs = b->end - (b->last -1);
 		if (!rs) {
 			reply_413(c);
 			return;
 		}
-		rb = b->last +1;
+		rb = b->last;
 	}
 
 	nr = tcp_read(fd, rb, rs, &tryagain);
 	if (nr > 0) {
-		b->last += nr -1;
+		b->last += nr;
 	} else {
 		if (!tryagain) {
 			klog(KOPOU_WARNING, "http connection disconnected: %d, %s", fd, strerror(errno));
@@ -349,7 +350,6 @@ static void http_request_handler(int fd, eventtype_t evtype)
 		}
 		return;
 	}
-
 
 	if (http_prepare_to_reply(c, evtype) == K_ERR) {
 		http_delete_connection(c);

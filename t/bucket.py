@@ -2,6 +2,40 @@
 
 import sys
 import requests
+from requests import Request, Session
+
+def bucket_create_image(url):
+
+    with open('/home/sujan/Virtualization.pdf') as fh:
+        payload = fh.read()
+        url = url + '/bucket/key91?abc=zyx'
+
+        s = Session()
+        headers = {'Content-Type':'application/pdf'}
+        headers['Connection'] = 'close';
+
+        req = Request('PUT', url, data=payload, headers=headers)
+        prepped = req.prepare()
+
+        res = s.send(prepped)    
+        print '{} {}, {}'.format(res.status_code, res.reason, str(res.elapsed))
+
+def bucket_create_json(url):
+
+    with open('/home/sujan/test2.json') as fh:
+        payload = fh.read()
+        url = url + '/bucket/key92'
+
+        s = Session()
+        headers = {'Content-Type':'application/json'}
+        headers['Connection'] = 'close';
+
+        req = Request('PUT', url, data=payload, headers=headers)
+        prepped = req.prepare()
+
+        res = s.send(prepped)    
+        print '{} {}, {}'.format(res.status_code, res.reason, str(res.elapsed))
+
 
 def bucket_create(url):
 
@@ -17,12 +51,12 @@ def bucket_create(url):
 
 def bucket_get(url):
 
-    url += '/bucket/key1'
+    url += '/bucket/key2.jpg'
     headers = {'Connection': 'close'}
     res = requests.get(url, headers=headers)
     print '{} {}, {}'.format(res.status_code, res.reason, str(res.elapsed))
     if res.status_code == 200:
-        print '{}:{} --> {}'.format(res.headers['Content-Length'], res.headers['Content-Type'], res.text)
+        print '{}:{}'.format(res.headers['Content-Length'], res.headers['Content-Type'])
 
     
 def main(args):
@@ -31,12 +65,15 @@ def main(args):
         print 'command missing'
         sys.exit(-1)
 
-    baseurl = 'http://192.168.3.77:7878'
+    baseurl = 'http://127.0.0.1:7878'
 
     if args[0] == 'c':
-        r = bucket_create(baseurl)
+        bucket_create(baseurl)
     elif args[0] == 'g':
-        r = bucket_get(baseurl)
+        bucket_get(baseurl)
+    elif args[0] == 'i':
+        bucket_create_image(baseurl)
+        bucket_create_json(baseurl)
 
     return 0
 
