@@ -125,7 +125,7 @@ void reply_503_now(kbuffer_t *b)
 	char fh[128];
 	char *h;
 
-	char rl[] = "HTTP/1.1 503 Server MaximumConnection\r\n";
+	char rl[] = "HTTP/1.1 503 MaxConnection\r\n";
 	size_t s = strlen(rl);
 
 	b->pos = b->last = b->start;
@@ -143,6 +143,11 @@ void reply_503_now(kbuffer_t *b)
 	memcpy(b->last, h, s);
 	b->last += s;
 
+	h = "Content-Length: 0\r\n";
+	s = strlen(h);
+	memcpy(b->last, h, s);
+	b->last += s;
+
 	get_http_date(fh, 128);
 	s = strlen(fh);
 	memcpy(b->last, fh, s);
@@ -151,11 +156,6 @@ void reply_503_now(kbuffer_t *b)
 	get_http_server_str(fh, 128);
 	s = strlen(fh);
 	memcpy(b->last, fh, s);
-	b->last += s;
-
-	h = "Content-Length: 0\r\n\r\n";
-	s = strlen(h);
-	memcpy(b->last, h, s);
 	b->last += s;
 }
 

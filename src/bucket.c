@@ -6,7 +6,7 @@ typedef struct {
 	size_t size;
 } bucket_obj_t;
 
-char stats_format[] = "{\"objects\":%d, \"bytes\":%zu, \"missed\":%d, \"hits\":%zu, \"deleted\":%zu}";
+char stats_format[] = "{\"objects\":%zu, \"bytes\":%zu, \"missed\":%zu, \"hits\":%zu, \"deleted\":%zu}";
 
 int bucket_put_cmd(kconnection_t *c)
 {
@@ -149,8 +149,8 @@ int stats_get_cmd(kconnection_t *c)
 	size_t len;
 
 	r = c->req;
-	snprintf(statsstr, 512, stats_format, stats.objects, stats.missed,
-			stats.hits, stats.deleted, stats.space);
+	snprintf(statsstr, 512, stats_format, stats.objects, stats.space,
+			stats.missed, stats.hits, stats.deleted);
 	len = strlen(statsstr);
 	r->res->size_hint += len;
 

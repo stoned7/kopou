@@ -107,40 +107,6 @@ int kevent_loop_start(kevent_loop_t *el)
 	return r;
 }
 
-/*
-void kevent_loop_stop(kevent_loop_t *el)
-{
-	el->stop = 1;
-}
-
-int kevent_is_free(kevent_loop_t *el, int fd)
-{
-	if (fd >= el->event_size)
-		return KEVENT_ERR;
-	if (el->kevents[fd].eventtype == KEVENT_FREE)
-		return 1;
-	return 0;
-}
-
-int kevent_already_writable(kevent_loop_t *el, int fd)
-{
-	if (fd >= el->event_size)
-		return KEVENT_ERR;
-	if (el->kevents[fd].eventtype & KEVENT_WRITABLE)
-		return 1;
-	return 0;
-}
-
-int kevent_already_readable(kevent_loop_t *el, int fd)
-{
-	if (fd >= el->event_size)
-		return KEVENT_ERR;
-	if (el->kevents[fd].eventtype & KEVENT_READABLE)
-		return 1;
-	return 0;
-}
-*/
-
 int kevent_add_event(kevent_loop_t *el, int fd, eventtype_t eventtype,
 		onread onread_handler, onwrite onwrite_handler,
 		onerror onerror_handler)
@@ -183,8 +149,6 @@ int kevent_add_event(kevent_loop_t *el, int fd, eventtype_t eventtype,
 
 	kev->eventtype = eventtype;
 	kev->fd = fd;
-	//klog(KOPOU_DEBUG, "fd: %d, add ev: %d, curr ev: %d, size: %d",
-		//fd, req_eventtype, eventtype, el->_event_size);
 	return KEVENT_OK;
 }
 
@@ -219,7 +183,5 @@ void kevent_del_event(kevent_loop_t *el, int fd, eventtype_t eventtype)
 		if (!(kev->eventtype & KEVENT_WRITABLE))
 			kev->onwrite_handler = NULL;
 	}
-	//klog(KOPOU_DEBUG, "fd: %d, del ev: %d, curr ev: %d, size: %d",
-				//fd, eventtype, kev->eventtype, el->_event_size);
 }
 
