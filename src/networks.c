@@ -7,7 +7,7 @@ static kconnection_t *http_create_connection(int fd)
 	c->fd = fd;
 	c->connection_type = CONNECTION_TYPE_HTTP;
 	c->connection_ts = kopou.current_time;
-	c->last_interaction_ts = -1;
+	c->last_interaction_ts = kopou.current_time;
 	c->disconnect_after_reply = 0;
 
 	c->req = xmalloc(sizeof(khttp_request_t));
@@ -69,7 +69,7 @@ static kconnection_t *http_create_connection(int fd)
 	return c;
 }
 
-static void http_delete_connection(kconnection_t *c)
+void http_delete_connection(kconnection_t *c)
 {
 	int i;
 	kbuffer_t *b, *tb;
@@ -462,7 +462,7 @@ void http_accept_new_connection(int fd, eventtype_t evtype)
 		if (kopou.nconns > settings.http_max_ccur_conns) {
 			if (!b) b = create_kbuffer(HTTP_RES_HEADERS_SIZE);
 			reply_503_now(b);
-			tcp_write(conn, b->start, (b->last - b->start) +1, &ta);
+			tcp_write(conn, b->start, b->last - b->start, &ta);
 			klog(KOPOU_WARNING, "exceed max concurrent connection limits: %zu",
 								kopou.nconns);
 			tcp_close(conn);

@@ -6,7 +6,7 @@
 #include <limits.h>
 #include <string.h>
 #include <time.h>
-#include <stdarg.h>
+#include <sys/timerfd.h>
 
 #include "common.h"
 #include "kstring.h"
@@ -61,7 +61,6 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_REQ_HEADERS_BUFFER_SIZE (1024 << 3) /* 8K */
 #define HTTP_REQ_BUFFER_SIZE (1024 << 4) /* 16K */
 #define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
-//#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
 #define HTTP_RES_WRITTEN_SIZE_MAX ((1024 << 10) << 4) /* 16 MB */
 #define HTTP_RES_HEADERS_SIZE (1024 << 1)
 
@@ -241,7 +240,6 @@ typedef struct {
 	unsigned char *header_value_start;
 	unsigned char *header_value_end;
 	unsigned char *header_end;
-	//unsigned char *body;
 
 	kstr_t *splitted_uri;
 	knamevalue_t *headers;
@@ -253,7 +251,6 @@ typedef struct {
 	parsing_state_t _parsing_state;
 
 	time_t timestamp;
-	//unsigned body_end_index;
 
 	unsigned connection_keepalive_timeout:16;
 	unsigned http_version:16;
@@ -276,6 +273,7 @@ struct kopou_settings {
 	kstr_t dbdir;
 	kstr_t dbfile;
 	kstr_t workingdir;
+	double http_req_continue_timeout;
 	size_t readonly_memory_threshold;
 	int http_max_ccur_conns;
 	int tcp_keepalive;
@@ -286,6 +284,8 @@ struct kopou_settings {
 	int verbosity;
 	int http_keepalive_timeout;
 	int http_close_connection_onerror;
+	int cron_interval;
+	int conns_cron_interval;
 };
 
 struct kopou_stats {
@@ -299,18 +299,18 @@ struct kopou_stats {
 struct kopou_server {
 	kstr_t pidfile;
 	kevent_loop_t *loop;
-	kconnection_t *curr_conn;
 	kconnection_t **conns;
 	int nconns;
+	int tconns;
+	time_t conns_last_cron_ts;
 
 	pid_t pid;
-	size_t bestmemory;
-	int exceedbestmemory;
 
 	time_t current_time;
 	int shutdown;
 	int hlistener;
-	int ilistener;
+	int klistener;
+	int cronfd;
 };
 
 /* main */
@@ -373,6 +373,7 @@ extern kopou_db_t *versiondb;
 int settings_from_file(const kstr_t filename);
 
 /* networks.c */
+void http_delete_connection(kconnection_t *c);
 void http_accept_new_connection(int fd, eventtype_t evtype);
 void http_listener_error(int fd, eventtype_t evtype);
 

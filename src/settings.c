@@ -100,6 +100,9 @@ static void _config_from_line(kstr_t config)
 		} else if (!strcasecmp(argv[0], "readonly_memory_threshold") &&
 					argc == 2) {
 			settings.readonly_memory_threshold = (size_t)atol(argv[1]);
+		} else if (!strcasecmp(argv[0], "http_request_continue_timeout")
+				&& argc == 2) {
+			settings.http_req_continue_timeout = atof(argv[1]);
 		}
 
 		for (j = 0; j < argc; j++) {

@@ -192,12 +192,10 @@ static void init_cmds_table(void)
 int execute_command(kconnection_t *c)
 {
 	khttp_request_t *r = c->req;
-	if (stats.space > settings.readonly_memory_threshold) {
-		if (r->cmd->flag & KCMD_WRITE_ONLY) {
-			//TODO: add headers
+	if (stats.space > settings.readonly_memory_threshold
+		&& r->cmd->flag & KCMD_WRITE_ONLY) {
 			reply_403(c);
 			return K_OK;
-		}
 	}
 	return r->cmd->execute(c);
 }
@@ -211,12 +209,12 @@ static void init_globals(int bg)
 	kopou.shutdown = 0;
 	kopou.hlistener = -1;
 	kopou.loop = NULL;
-	kopou.ilistener = -1;
+	kopou.klistener = -1;
 	kopou.nconns = 0;
-	kopou.curr_conn = NULL;
-	kopou.bestmemory = 0;
-	kopou.exceedbestmemory = 0;
+	kopou.cronfd = -1;
 	kopou.conns = NULL;
+	kopou.tconns = 0;
+	kopou.conns_last_cron_ts = kopou.current_time;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -233,6 +231,10 @@ static void init_globals(int bg)
 	settings.tcp_keepalive = 0;
 	settings.http_close_connection_onerror = 1;
 	settings.readonly_memory_threshold = 1048576;
+	settings.cron_interval = 500;
+	settings.http_req_continue_timeout = 5.0;
+	settings.conns_cron_interval = 2.0;
+
 
 	stats.objects = 0;
 	stats.hits = 0;
@@ -385,7 +387,7 @@ static int setup_sighandler_asyncworkers(void)
 	return K_OK;
 }
 
-static void database_cronjob(void)
+static void db_expand_cron(void)
 {
 	int r;
 	r = kdb_try_expand(bucketdb);
@@ -402,12 +404,10 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
 
-	database_cronjob();
+	db_expand_cron();
 	kopou.current_time = time(NULL);
 
-	/* check cli req continue timeout/idle time
-	 * clean them if required
-	 */
+	/* triger backup if required*/
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
@@ -444,6 +444,99 @@ static int init_kopou_listener(void)
 	return K_OK;
 }
 
+static void kopou_cron_error(int fd, eventtype_t evtype)
+{
+	K_FORCE_USE(fd);
+	K_FORCE_USE(evtype);
+	klog(KOPOU_ERR, "kopou cron job err: %s", strerror(errno));
+	kopou.shutdown = 1;
+}
+
+static void connection_cron(void)
+{
+	kconnection_t *c;
+	khttp_request_t *r;
+	int i;
+
+	if (difftime(kopou.current_time, kopou.conns_last_cron_ts)
+		< settings.conns_cron_interval)
+		return;
+
+	for (i = 0; i < kopou.tconns; i++) {
+
+		if ((c = kopou.conns[i]) == NULL) continue;
+		if (c->req == NULL) continue;
+
+		r = c->req;
+		if (r->buf == NULL) continue;
+
+		if (c->connection_type == CONNECTION_TYPE_HTTP) {
+			if (difftime(kopou.current_time, c->last_interaction_ts)
+				>= settings.http_req_continue_timeout) {
+				http_delete_connection(c);
+				klog(KOPOU_WARNING, "deleted hanged http connection %d", c->fd);
+			}
+		}
+	}
+
+	kopou.conns_last_cron_ts = kopou.current_time;
+}
+
+
+static void kopou_cron(int fd, eventtype_t evtype)
+{
+	K_FORCE_USE(fd);
+	K_FORCE_USE(evtype);
+
+	uint64_t num_exp;
+        ssize_t tsize;
+        tsize = read(fd, &num_exp, sizeof(uint64_t));
+        if (tsize != sizeof(uint64_t)) {
+		klog(KOPOU_WARNING, "reading err from cron %d", fd);
+                return;
+        }
+
+	kopou.current_time = time(NULL);
+
+	db_expand_cron();
+	connection_cron();
+
+	/* check cli req continue timeout/idle time
+	 * clean them if required
+	 */
+
+	/* triger dbbackup if required*/
+
+}
+
+static int init_kopou_cron(void)
+{
+	kopou.cronfd = timerfd_create(CLOCK_REALTIME, 0);
+	if (kopou.cronfd == K_ERR) {
+		klog(KOPOU_ERR, "fail creating kopou cron job");
+		return K_ERR;
+	}
+
+	struct itimerspec cron_inv;
+        cron_inv.it_interval.tv_sec = 0;
+        cron_inv.it_interval.tv_nsec = settings.cron_interval * 1000000;
+        cron_inv.it_value.tv_sec = 0;
+        cron_inv.it_value.tv_nsec = settings.cron_interval * 1000000;
+
+	if (timerfd_settime(kopou.cronfd, 0, &cron_inv, NULL) == K_ERR) {
+		klog(KOPOU_ERR, "fail setting kopou cron interval");
+		return K_ERR;
+	}
+
+	if (kevent_add_event(kopou.loop, kopou.cronfd, KEVENT_READABLE,
+		kopou_cron, NULL, kopou_cron_error) == KEVENT_ERR) {
+		klog(KOPOU_ERR, "fail registering kopou cron job");
+		return K_ERR;
+	}
+
+	return K_OK;
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 2)
@@ -465,6 +558,7 @@ int main(int argc, char **argv)
 				usages(argv[0]);
 
 	init_globals(argc == 3);
+
 	if (settings_from_file(argv[1]) == K_ERR)
 		_kdie("fail reading config '%s'", argv[1]);
 	settings.configfile = kstr_new(argv[1]);
@@ -472,18 +566,24 @@ int main(int argc, char **argv)
 	if (settings.background)
 		if (become_background() == K_ERR)
 			_kdie("fail to become background");
+
 	if (setup_sighandler_asyncworkers() == K_ERR)
 		_kdie("fail to setup signal handlers");
 
 	init_cmds_table();
 	xalloc_set_oom_handler(kopou_oom_handler);
-	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
-							sizeof(kconnection_t*));
+
+	kopou.tconns = settings.http_max_ccur_conns + KOPOU_OWN_FDS;
+	kopou.conns = xcalloc(kopou.tconns, sizeof(kconnection_t*));
+
 	init_dbs();
 	klog(KOPOU_WARNING, "starting kopou, http %s:%d", settings.address,
 			settings.port);
+
 	if (init_kopou_listener() == K_ERR)
 		_kdie("fail to start listener");
+	if (init_kopou_cron() == K_ERR)
+		_kdie("fail to start kopou cron");
 
 	kevent_loop_start(kopou.loop);
 

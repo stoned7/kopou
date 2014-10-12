@@ -15,7 +15,7 @@ enum {
 	KEVENT_FREE = (0x000),
 	KEVENT_READABLE = (0x001 << 0),
 	KEVENT_WRITABLE = (0x001 << 1),
-	KEVENT_FAULTY = (0x001 << 2),
+	KEVENT_FAULTY = (0x001 << 2)
 };
 
 typedef unsigned int eventtype_t;
@@ -59,13 +59,6 @@ int kevent_add_event(kevent_loop_t *el, int fd, eventtype_t eventtype,
 		onerror onerror_handler);
 
 void kevent_del_event(kevent_loop_t *el, int fd, eventtype_t eventtype);
-
-/*
-void kevent_loop_stop(kevent_loop_t *el);
-int kevent_is_free(kevent_loop_t *el, int fd);
-int kevent_already_writable(kevent_loop_t *el, int fd);
-int kevent_already_readable(kevent_loop_t *el, int fd);
-*/
 
 
 static inline void kevent_loop_stop(kevent_loop_t *el)
