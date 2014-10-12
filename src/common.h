@@ -1,10 +1,14 @@
-#ifndef __CONFIG_H__
-#define __CONFIG_H__
+#ifndef __COMMON_H__
+#define __COMMON_H__
+
+
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #if defined(linux)
 #elif defined(__linux__)
 #else
-#error "currently kopou supports only LINUX"
+#error "currently kopou runs only on LINUX"
 #endif
 
 #include <sys/types.h>

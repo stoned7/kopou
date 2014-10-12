@@ -12,60 +12,61 @@ static void set_http_response_headers(kconnection_t *c, kbuffer_t *b)
 	for (i = 0; i < r->res->nheaders; i++) {
 		h = r->res->headers[i];
 		s = kstr_len(h);
-		memcpy(b->last + 1, h, s);
-		b->last = b->last + s;
+		memcpy(b->last, h, s);
+		b->last += s;
 	}
 
 	get_http_date(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last + 1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	get_http_server_str(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last + 1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 }
 
 static void reply_err(kconnection_t *c, char *rl, int rllen)
 {
-	size_t s;
+	khttp_request_t *r;
+	kbuffer_t *b;
 	char *h;
+	size_t s;
 
-	khttp_request_t *r = c->req;
-	kbuffer_t *b = r->res->buf;
-	if (b == NULL) {
-		b = xmalloc(sizeof(kbuffer_t));
-		b->start = xmalloc(HTTP_RES_HEADERS_SIZE);
-		b->end = b->start + HTTP_RES_HEADERS_SIZE - 1;
+	r = c->req;
+	b = r->res->buf;
+	if (!b) {
+		b = create_kbuffer(r->res->size_hint);
 		r->res->buf = r->res->curbuf = b;
-		b->next = NULL;
-	} else
-		r->res->curbuf = r->res->buf;
+	}
 	b->pos = b->last = b->start;
 
-	memcpy(b->pos, rl, rllen);
-	b->last = b->pos + rllen - 1;
+	memcpy(b->start, rl, rllen);
+	b->last = b->start + rllen;
 
-	if (settings.http_close_connection_onerror || !settings.http_keepalive
-			|| r->connection_close || !r->connection_keepalive) {
+	if (settings.http_close_connection_onerror
+		|| !settings.http_keepalive
+		|| r->connection_close
+		|| !r->connection_keepalive) {
 		h = HTTP_H_CONNECTION_CLOSE;
 		c->disconnect_after_reply = 1;
 	}
 	else
 		h = HTTP_H_CONNECTION_KEEPALIVE;
+
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	h = HTTP_H_NO_CACHE;
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	h = "Content-Length: 0\r\n";
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
+	memcpy(b->last, h, s);
 	b->last = b->last + s;
 
 	set_http_response_headers(c, b);
@@ -124,95 +125,93 @@ void reply_503_now(kbuffer_t *b)
 	char fh[128];
 	char *h;
 
-	char rl[] = "HTTP/1.1 503 Server TooBusy\r\n";
+	char rl[] = "HTTP/1.1 503 Server MaximumConnection\r\n";
 	size_t s = strlen(rl);
 
 	b->pos = b->last = b->start;
 
-	memcpy(b->pos, rl, s);
-	b->last = b->pos + s - 1;
+	memcpy(b->start, rl, s);
+	b->last = b->start + s;
 
 	h = HTTP_H_CONNECTION_CLOSE;
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	h = HTTP_H_NO_CACHE;
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 
 	get_http_date(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last + 1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	get_http_server_str(fh, 128);
 	s = strlen(fh);
-	memcpy(b->last + 1, fh, s);
-	b->last = b->last + s;
+	memcpy(b->last, fh, s);
+	b->last += s;
 
 	h = "Content-Length: 0\r\n\r\n";
 	s = strlen(h);
-	memcpy(b->last + 1, h, s);
-	b->last = b->last + s;
+	memcpy(b->last, h, s);
+	b->last += s;
 }
 
 void reply_505(kconnection_t *c)
 {
-	char rl[] = "HTTP/1.1 505 Version Not Supported\r\n";
+	char rl[] = "HTTP/1.1 505 VersionNotSupported\r\n";
 	reply_err(c, rl, strlen(rl));
 }
 
 static void reply_success(kconnection_t *c, char *rl, int rllen)
 {
-	khttp_request_t *r = c->req;
-	kbuffer_t *b = r->res->curbuf;
+	khttp_request_t *r;
+	kbuffer_t *b;
 
 	size_t s;
 	char *h;
 
-	if (b == NULL) {
-		b = xmalloc(sizeof(kbuffer_t));
-		b->start = xmalloc(HTTP_RES_HEADERS_SIZE);
-		b->end = b->start + HTTP_RES_HEADERS_SIZE - 1;
-		b->pos = b->last = b->start;
-		b->next = NULL;
+	r = c->req;
+	b = r->res->buf;
+
+	if (!b) {
+		b = create_kbuffer(r->res->size_hint);
 		r->res->buf = r->res->curbuf = b;
-
-		memcpy(b->pos, rl, rllen);
-		b->last = b->pos + rllen - 1;
-
-		if (settings.http_keepalive && r->connection_keepalive)
-			h = HTTP_H_CONNECTION_KEEPALIVE;
-		else {
-			h = HTTP_H_CONNECTION_CLOSE;
-			c->disconnect_after_reply = 1;
-		}
-		s = strlen(h);
-		memcpy(b->last + 1, h, s);
-		b->last = b->last + s;
-
-		if (r->res->flag & HTTP_RES_CACHABLE)
-			h = HTTP_H_YES_CACHE;
-		else
-			h = HTTP_H_NO_CACHE;
-		s = strlen(h);
-		memcpy(b->last + 1, h, s);
-		b->last = b->last + s;
-
-		if (!(r->res->flag & HTTP_RES_LENGTH)) {
-			h = "Content-Length: 0\r\n";
-			s = strlen(h);
-			memcpy(b->last + 1, h, s);
-			b->last = b->last + s;
-		}
-
-		set_http_response_headers(c, b);
 	}
+
+	memcpy(b->start, rl, rllen);
+	b->last = b->start + rllen;
+
+	if (settings.http_keepalive && r->connection_keepalive)
+		h = HTTP_H_CONNECTION_KEEPALIVE;
+	else {
+		h = HTTP_H_CONNECTION_CLOSE;
+		c->disconnect_after_reply = 1;
+	}
+	s = strlen(h);
+	memcpy(b->last, h, s);
+	b->last += s;
+
+	if (r->res->flag & HTTP_RES_CACHABLE)
+		h = HTTP_H_YES_CACHE;
+	else
+		h = HTTP_H_NO_CACHE;
+	s = strlen(h);
+	memcpy(b->last, h, s);
+	b->last += s;
+
+	if (!(r->res->flag & HTTP_RES_LENGTH)) {
+		h = "Content-Length: 0\r\n";
+		s = strlen(h);
+		memcpy(b->last, h, s);
+		b->last += s;
+	}
+
+	set_http_response_headers(c, b);
 }
 
-/* TODO copy the contents */
 void reply_200(kconnection_t *c)
 {
 	char *rl = "HTTP/1.1 200 OK\r\n";

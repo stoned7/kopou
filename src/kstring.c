@@ -35,12 +35,18 @@ kstr_t kstr_dup(kstr_t str)
 
 int kstr_tok(kstr_t str, const char *deli, kstr_t **tokens)
 {
-	size_t len, delilen;
+	size_t len = kstr_len(str);
+	return kstr_tok_len(str, len, deli, tokens);
+}
+
+
+int kstr_tok_len(char *str, size_t len, const char *deli, kstr_t **tokens)
+{
+	size_t delilen;
 	size_t i, j = 0;
 	int ntoken = 0, ii;
         kstr_t *vector = NULL;
 
-	len = kstr_len(str);
 	delilen = strlen(deli);
 	if (len <= 0 || delilen <= 0)
 		goto err;

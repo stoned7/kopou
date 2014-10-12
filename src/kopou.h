@@ -1,11 +1,14 @@
 #ifndef __KOPOU_H__
 #define __KOPOU_H__
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <limits.h>
 #include <string.h>
 #include <time.h>
 #include <stdarg.h>
 
+#include "common.h"
 #include "kstring.h"
 #include "xalloc.h"
 #include "aarray.h"
@@ -13,6 +16,7 @@
 #include "kevent.h"
 #include "tcp.h"
 #include "map.h"
+#include "jenkins_hash.h"
 
 #define K_OK 0
 #define K_ERR -1
@@ -54,10 +58,12 @@ void klog(int level, const char *fmt, ...);
 		exit(EXIT_FAILURE);\
 	} while (0)
 
+#define HTTP_REQ_HEADERS_BUFFER_SIZE (1024 << 3) /* 8K */
 #define HTTP_REQ_BUFFER_SIZE (1024 << 4) /* 16K */
 #define HTTP_REQ_CONTENT_LENGTH_MAX ((1024 << 10) << 6) /* 64 MB */
-#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
+//#define HTTP_REQ_BUFFER_SIZE_MAX (2048 + HTTP_REQ_CONTENT_LENGTH_MAX)
 #define HTTP_RES_WRITTEN_SIZE_MAX ((1024 << 10) << 4) /* 16 MB */
+#define HTTP_RES_HEADERS_SIZE (1024 << 1)
 
 #define HTTP_REQ_CONTINUE_IDLE_TIMEOUT (60)
 #define HTTP_DEFAULT_KEEPALIVE_TIMEOUT (36000)
@@ -65,7 +71,7 @@ void klog(int level, const char *fmt, ...);
 #define CONFIG_LINE_LENGTH_MAX 1024
 
 #define HTTP_DEFAULT_MAX_CONCURRENT_CONNS 1024
-#define KOPOU_OWN_FDS (32 + (2 * VNODE_SIZE))
+#define KOPOU_OWN_FDS (32 + VNODE_SIZE)
 #define KOPOU_DEFAULT_TCP_KEEPALIVE_INTERVAL 100
 
 #define HTTP_OK 0
@@ -101,9 +107,10 @@ void klog(int level, const char *fmt, ...);
 #define HTTP_H_CONNECTION_CLOSE "Connection: close\r\n"
 #define HTTP_H_YES_CACHE "Cache-Control: public, max-age=315360000\r\n"
 #define HTTP_H_NO_CACHE "Cache-Control: no-cache, no-store, must-revalidate\r\n"
-#define HTTP_H_ETAG "Etag: %s\r\n";
+#define HTTP_H_CONTENTLENGTH_FMT "Content-Length: %zu\r\n"
+#define HTTP_H_CONTENTTYPE_FMT "Content-Type: %s\r\n"
+#define HTTP_H_CONTENTTYPE_JSON "Content-Type: application/json\r\n"
 
-#define HTTP_RES_HEADERS_SIZE (1024 << 1)
 #define HTTP_RES_CACHABLE (1 << 0)
 #define HTTP_RES_CHUNKED (1 << 1)
 #define HTTP_RES_LENGTH (1 << 2)
@@ -151,19 +158,10 @@ typedef enum {
         parsing_header_almost_done,
 	parsing_header_done,
 	parsing_body_start,
+	parsing_body_continue,
 	parsing_body_done,
 	parsing_done
 } parsing_state_t;
-
-
-typedef struct {
-	void *val;
-	kstr_t content_type;
-	size_t size;
-	unsigned long long version;
-	unsigned type:4;
-	unsigned encoding:4;
-} kobj_t;
 
 typedef struct knamevalue {
 	kstr_t name;
@@ -189,7 +187,6 @@ typedef struct {
 } kconnection_t;
 
 enum {
-	KCMD_FLAG_NONE = 0,
 	KCMD_READ_ONLY = (1 << 0),
 	KCMD_WRITE_ONLY = (1 << 1),
 	KCMD_SKIP_REQUEST_BODY = (1 << 2),
@@ -213,6 +210,7 @@ typedef struct {
 	kbuffer_t *buf;
 	kbuffer_t *curbuf;
 	kstr_t *headers;
+	size_t size_hint;
 	int nheaders;
 	unsigned char flag;
 } khttp_response_t;
@@ -243,19 +241,19 @@ typedef struct {
 	unsigned char *header_value_start;
 	unsigned char *header_value_end;
 	unsigned char *header_end;
-
-	unsigned char *body;
+	//unsigned char *body;
 
 	kstr_t *splitted_uri;
 	knamevalue_t *headers;
 	int nsplitted_uri;
 
 	size_t content_length;
+	size_t rcontent_length;
 	kstr_t content_type;
 	parsing_state_t _parsing_state;
 
 	time_t timestamp;
-	unsigned body_end_index;
+	//unsigned body_end_index;
 
 	unsigned connection_keepalive_timeout:16;
 	unsigned http_version:16;
@@ -264,7 +262,6 @@ typedef struct {
 	unsigned method:4;
 	unsigned connection_keepalive:1;
 	unsigned connection_close:1;
-	unsigned transfer_encoding_chunked:1;
 	unsigned complex_uri:1;
 	unsigned quoted_uri:1;
 	unsigned plus_in_uri:1;
@@ -296,6 +293,7 @@ struct kopou_stats {
 	unsigned long long missed;
 	unsigned long long hits;
 	unsigned long long deleted;
+	unsigned long long space;
 };
 
 struct kopou_server {
@@ -315,9 +313,61 @@ struct kopou_server {
 	int ilistener;
 };
 
+/* main */
 extern struct kopou_server kopou;
 extern struct kopou_settings settings;
 extern struct kopou_stats stats;
+kcommand_t* get_matched_cmd(kconnection_t *c);
+kbuffer_t *create_kbuffer(size_t size);
+
+/* dbs */
+typedef struct _kopou_db {
+	aarray_t *primary;
+	aarray_t *secondary;
+	long rehashpos;
+	int loadfactor;
+} _kopou_db_t;
+
+typedef struct kopou_db {
+	_kopou_db_t *main;
+	unsigned long dirty;
+	pid_t background;
+	int enable_resize;
+} kopou_db_t;
+
+kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
+		_keycomparer kc);
+void kdb_del(kopou_db_t *db);
+void *kdb_get(kopou_db_t *db, kstr_t key);
+int kdb_exist(kopou_db_t *db, kstr_t key);
+int kdb_add(kopou_db_t *db, kstr_t key, void *obj);
+int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
+int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
+int kdb_try_expand(kopou_db_t *db);
+
+static inline void kdb_enable_resize(kopou_db_t *db)
+{
+	db->enable_resize = 1;
+}
+
+static inline void kdb_disable_resize(kopou_db_t *db)
+{
+	db->enable_resize = 0;
+}
+
+
+/* bucket.c */
+extern kopou_db_t *bucketdb;
+int execute_command(kconnection_t *c);
+int bucket_put_cmd(kconnection_t *c);
+int bucket_get_cmd(kconnection_t *c);
+int bucket_head_cmd(kconnection_t *c);
+int bucket_delete_cmd(kconnection_t *c);
+int favicon_get_cmd(kconnection_t *c);
+int stats_get_cmd(kconnection_t *c);
+
+/* version.c */
+extern kopou_db_t *versiondb;
 
 /* settings.c */
 int settings_from_file(const kstr_t filename);
@@ -330,7 +380,6 @@ void http_listener_error(int fd, eventtype_t evtype);
 int http_parse_request_line(kconnection_t *conn);
 int http_parse_header_line(kconnection_t *conn);
 int http_parse_contentlength_body(kconnection_t *c);
-int http_parse_chunked_body(kconnection_t *c);
 
 /* reply.c */
 void reply_400(kconnection_t *c); //bad request
@@ -350,16 +399,7 @@ void reply_201(kconnection_t *c); //created
 void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
-/* commands.c */
-int execute_command(kconnection_t *c);
-int bucket_put_cmd(kconnection_t *c);
-int bucket_get_cmd(kconnection_t *c);
-int bucket_head_cmd(kconnection_t *c);
-int bucket_delete_cmd(kconnection_t *c);
-int favicon_get_cmd(kconnection_t *c);
-int stats_get_cmd(kconnection_t *c);
 
-kcommand_t* get_matched_cmd(kconnection_t *c);
 static inline void get_http_date(char *buf, size_t len)
 {
 	struct tm *tm = gmtime(&kopou.current_time);
@@ -371,8 +411,5 @@ static inline void get_http_server_str(char *buf, size_t len)
 	snprintf(buf, len, "Server: kopou v%s %d bits, -cluster[%d]\r\n\r\n",
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
-
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
 
 #endif

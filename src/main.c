@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -14,7 +13,43 @@ struct kopou_server kopou;
 struct kopou_settings settings;
 struct kopou_stats stats;
 
+kopou_db_t *bucketdb;
+kopou_db_t *versiondb;
+
 static map_t *cmds_table;
+
+kbuffer_t *create_kbuffer(size_t size)
+{
+	kbuffer_t *b;
+	b = xmalloc(sizeof(*b));
+	b->start = xmalloc(size);
+	b->end = b->start + (size -1);
+	b->pos = b->last = b->start;
+	b->next = NULL;
+	return b;
+}
+
+uint32_t generic_hf(const kstr_t key)
+{
+	return jenkins_hash(key, kstr_len(key));
+}
+
+int generic_kc(const kstr_t key1, const kstr_t key2)
+{
+	size_t l1 = kstr_len(key1);
+	size_t l2 = kstr_len(key2);
+	if (l1 != l2)
+		return 0;
+
+	return !memcmp(key1, key2, l1);
+}
+
+static void init_dbs(void)
+{
+	/* db size should be power of 2 always */
+	bucketdb = kdb_new(1024, 5, generic_hf, generic_kc);
+	versiondb = kdb_new(512, 5, generic_hf, generic_kc);
+}
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
@@ -112,6 +147,21 @@ static void init_cmds_table(void)
 	delbucket->next = NULL;
 	map_add(cmds_table, bucket_name, headbucket);
 
+	/* version */
+	/*
+	kstr_t version_name = kstr_new("version");
+	nt=2;
+	p=1;
+	kcommand_t *putversion = xmalloc(sizeof(kcommand_t));
+	*putversion = (kcommand_t){.method = HTTP_METHOD_PUT, .execute = NULL,
+		.nptemplate = nt, .nparams = p, .flag = KCMD_WRITE_ONLY };
+	putversion->ptemplate = xcalloc(nt, sizeof(kstr_t));
+	putversion->ptemplate[0] = version_name;
+	putversion->ptemplate[1] = NULL;
+	putversion->params = xcalloc(p, sizeof(kstr_t));
+	putversion->nparams = p;
+	*/
+
 	/* stats */
 	kstr_t stats_name = kstr_new("stats");
 	nt = 1;
@@ -138,6 +188,20 @@ static void init_cmds_table(void)
 	favicon->ptemplate[0] = favicon_name;
 	map_add(cmds_table, favicon_name, favicon);
 }
+
+int execute_command(kconnection_t *c)
+{
+	khttp_request_t *r = c->req;
+	if (stats.space > settings.readonly_memory_threshold) {
+		if (r->cmd->flag & KCMD_WRITE_ONLY) {
+			//TODO: add headers
+			reply_403(c);
+			return K_OK;
+		}
+	}
+	return r->cmd->execute(c);
+}
+
 
 static void init_globals(int bg)
 {
@@ -174,12 +238,13 @@ static void init_globals(int bg)
 	stats.hits = 0;
 	stats.missed = 0;
 	stats.deleted = 0;
+	stats.space = 0;
 }
 
 static void kopou_oom_handler(size_t size)
 {
 	_kdie("out of memory, total memory used: %lu bytes"
-		"and fail to alloc:%lu bytes", xalloc_total_mem_used(), size);
+		"and fail to alloc:%lu bytes", stats.space, size);
 }
 
 
@@ -320,12 +385,26 @@ static int setup_sighandler_asyncworkers(void)
 	return K_OK;
 }
 
+static void database_cronjob(void)
+{
+	int r;
+	r = kdb_try_expand(bucketdb);
+	if (r == K_OK)
+		klog(KOPOU_DEBUG, "resizing bucketdb");
+	r = kdb_try_expand(versiondb);
+	if (r == K_OK)
+		klog(KOPOU_DEBUG, "resizing versiondb");
+}
+
+
 static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
 
+	database_cronjob();
 	kopou.current_time = time(NULL);
+
 	/* check cli req continue timeout/idle time
 	 * clean them if required
 	 */
@@ -400,6 +479,7 @@ int main(int argc, char **argv)
 	xalloc_set_oom_handler(kopou_oom_handler);
 	kopou.conns = xcalloc(settings.http_max_ccur_conns + KOPOU_OWN_FDS,
 							sizeof(kconnection_t*));
+	init_dbs();
 	klog(KOPOU_WARNING, "starting kopou, http %s:%d", settings.address,
 			settings.port);
 	if (init_kopou_listener() == K_ERR)

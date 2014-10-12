@@ -183,8 +183,8 @@ int kevent_add_event(kevent_loop_t *el, int fd, eventtype_t eventtype,
 
 	kev->eventtype = eventtype;
 	kev->fd = fd;
-	klog(KOPOU_DEBUG, "fd: %d, add ev: %d, curr ev: %d, size: %d",
-		fd, req_eventtype, eventtype, el->_event_size);
+	//klog(KOPOU_DEBUG, "fd: %d, add ev: %d, curr ev: %d, size: %d",
+		//fd, req_eventtype, eventtype, el->_event_size);
 	return KEVENT_OK;
 }
 
@@ -219,7 +219,7 @@ void kevent_del_event(kevent_loop_t *el, int fd, eventtype_t eventtype)
 		if (!(kev->eventtype & KEVENT_WRITABLE))
 			kev->onwrite_handler = NULL;
 	}
-	klog(KOPOU_DEBUG, "fd: %d, del ev: %d, curr ev: %d, size: %d",
-				fd, eventtype, kev->eventtype, el->_event_size);
+	//klog(KOPOU_DEBUG, "fd: %d, del ev: %d, curr ev: %d, size: %d",
+				//fd, eventtype, kev->eventtype, el->_event_size);
 }
 

@@ -45,13 +45,16 @@ static uint32_t valid_uri[] = {
 	0xffffffff /* 1111 1111 1111 1111 1111 1111 1111 1111 */
 };
 
+/* parsing http inspired from nginx and respecting */
+
+
 int http_parse_request_line(kconnection_t *conn)
 {
 	unsigned char c, ch, *p, *m;
 	khttp_request_t *r = conn->req;
 
 	parsing_state_t state = r->_parsing_state;
-	for (p = r->buf->pos; p <= r->buf->last; p++) {
+	for (p = r->buf->pos; p < r->buf->last; p++) {
 		ch = *p;
 		switch (state) {
 
@@ -547,12 +550,13 @@ int http_parse_request_line(kconnection_t *conn)
 	return HTTP_CONTINUE;
 
 done:
-	r->buf->pos = p + 1;
+	r->buf->pos = p +1;
 	if (r->request_end == NULL)
 		r->request_end = p;
 	r->_parsing_state = parsing_reqline_done;
 	r->http_version = r->major_version * 1000 + r->minor_version;
-	if (r->http_version == HTTP_VERSION_9) {
+	if (r->http_version == HTTP_VERSION_9
+			|| r->http_version == HTTP_VERSION_10) {
 		reply_505(conn);
 		return HTTP_ERR;
 	}
@@ -574,7 +578,7 @@ int http_parse_header_line(kconnection_t *conn)
 
 	parsing_state_t state = r->_parsing_state;
 
-	for (p = r->buf->pos; p <= r->buf->last; p++) {
+	for (p = r->buf->pos; p < r->buf->last; p++) {
 		ch = *p;
 
 		switch (state) {
@@ -720,29 +724,49 @@ int http_parse_header_line(kconnection_t *conn)
 			}
 			break;
 
-		} /* state switch */
-	} /* for end */
+		}
+	}
 
 	r->buf->pos = p;
 	r->_parsing_state = state;
 	return HTTP_CONTINUE;
 
 done:
-	r->buf->pos = p + 1;
+	r->buf->pos = p +1;
 	r->_parsing_state = state;
 	return HTTP_OK;
 }
 
 int http_parse_contentlength_body(kconnection_t *c)
 {
-	K_FORCE_USE(c);
+	khttp_request_t *r;
+	kbuffer_t *b;
+	size_t rs;
+
+	r = c->req;
+	b = r->curbuf;
+
+	if (r->_parsing_state == parsing_header_done)
+		r->_parsing_state = parsing_body_start;
+
+	rs = b->last - b->pos;
+	r->rcontent_length += rs;
+	b->pos += rs;
+
+	if (r->rcontent_length  < r->content_length)
+		return HTTP_CONTINUE;
+
+	if (r->rcontent_length != r->content_length) {
+		reply_400(c);
+		return HTTP_ERR;
+	}
+
+	if (r->rcontent_length > HTTP_REQ_CONTENT_LENGTH_MAX) {
+		reply_413(c);
+		return HTTP_ERR;
+	}
+
+	r->_parsing_state = parsing_done;
 	return HTTP_OK;
 }
-
-int http_parse_chunked_body(kconnection_t *c)
-{
-	reply_400(c);
-	return HTTP_ERR;
-}
-
 
