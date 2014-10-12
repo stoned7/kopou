@@ -1,3 +1,8 @@
+/* 
+ * Inspired from nginx and respecting Nginx, Copyright (C) Igor Sysoev.
+ * Further changes and new api are added by sujandutta@gmail.com.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -39,6 +44,9 @@ static uint32_t valid_uri[] = {
 	0xffffffff, /* 1111 1111 1111 1111 1111 1111 1111 1111 */
 	0xffffffff /* 1111 1111 1111 1111 1111 1111 1111 1111 */
 };
+
+/* parsing http inspired from nginx and respecting */
+
 
 int http_parse_request_line(kconnection_t *conn)
 {

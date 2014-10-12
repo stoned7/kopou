@@ -295,7 +295,6 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 	return HTTP_CONTINUE;
 }
 
-static int i;
 static void http_request_handler(int fd, eventtype_t evtype)
 {
 	kbuffer_t *b, *nb;
@@ -406,6 +405,12 @@ static void http_request_handler(int fd, eventtype_t evtype)
 				}
 			}
 		} while (r->_parsing_state != parsing_header_done);
+
+		if (r->cmd->flag & KCMD_SKIP_REQUEST_BODY
+			&& r->content_length > 0) {
+			reply_400(c);
+			return;
+		}
 
 		if (r->content_length > HTTP_REQ_CONTENT_LENGTH_MAX) {
 			reply_413(c);

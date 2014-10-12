@@ -192,7 +192,7 @@ static void init_cmds_table(void)
 int execute_command(kconnection_t *c)
 {
 	khttp_request_t *r = c->req;
-	if (settings.readonly_memory_threshold < xalloc_total_mem_used()) {
+	if (stats.space > settings.readonly_memory_threshold) {
 		if (r->cmd->flag & KCMD_WRITE_ONLY) {
 			//TODO: add headers
 			reply_403(c);
@@ -238,12 +238,13 @@ static void init_globals(int bg)
 	stats.hits = 0;
 	stats.missed = 0;
 	stats.deleted = 0;
+	stats.space = 0;
 }
 
 static void kopou_oom_handler(size_t size)
 {
 	_kdie("out of memory, total memory used: %lu bytes"
-		"and fail to alloc:%lu bytes", xalloc_total_mem_used(), size);
+		"and fail to alloc:%lu bytes", stats.space, size);
 }
 
 

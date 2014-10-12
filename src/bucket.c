@@ -6,7 +6,7 @@ typedef struct {
 	size_t size;
 } bucket_obj_t;
 
-char stats_format[] = "{\"objects\":%d, \"missed\":%d, \"hits\":%zu, \"deleted\":%zu, \"memused\": \"%zu\"}";
+char stats_format[] = "{\"objects\":%d, \"bytes\":%zu, \"missed\":%d, \"hits\":%zu, \"deleted\":%zu}";
 
 int bucket_put_cmd(kconnection_t *c)
 {
@@ -36,7 +36,6 @@ int bucket_put_cmd(kconnection_t *c)
 
 	b = b->next;
 	if (b) {
-		printf("put\n");
 		cs = (b->last - b->start);
 		memcpy(o->data + s, b->start, cs);
 		s += cs;
@@ -47,15 +46,18 @@ int bucket_put_cmd(kconnection_t *c)
 		re = kdb_upd(bucketdb, k, o, (void**)&oo);
 		if (re == K_OK) {
 			kstr_del(oo->content_type);
+			stats.space -= oo->size;
 			xfree(oo->data);
 			xfree(oo);
 		}
 		kstr_del(k);
+		stats.space += o->size;
 		reply_200(c);
 		return K_OK;
 	}
 
 	kdb_add(bucketdb, k, o);
+	stats.space += o->size;
 	reply_201(c);
 	return K_OK;
 }
@@ -129,6 +131,7 @@ int bucket_delete_cmd(kconnection_t *c)
 		return K_OK;
 	}
 
+	stats.space -= o->size;
 	kstr_del(o->content_type);
 	xfree(o->data);
 	xfree(o);
@@ -147,7 +150,7 @@ int stats_get_cmd(kconnection_t *c)
 
 	r = c->req;
 	snprintf(statsstr, 512, stats_format, stats.objects, stats.missed,
-			stats.hits, stats.deleted, xalloc_total_mem_used());
+			stats.hits, stats.deleted, stats.space);
 	len = strlen(statsstr);
 	r->res->size_hint += len;
 

@@ -1,6 +1,8 @@
 #ifndef __KOPOU_H__
 #define __KOPOU_H__
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <limits.h>
 #include <string.h>
 #include <time.h>
@@ -291,6 +293,7 @@ struct kopou_stats {
 	unsigned long long missed;
 	unsigned long long hits;
 	unsigned long long deleted;
+	unsigned long long space;
 };
 
 struct kopou_server {
