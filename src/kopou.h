@@ -199,6 +199,7 @@ typedef struct kcommand {
 	int (*execute)(kconnection_t *c);
 	kstr_t *ptemplate;
 	kstr_t *params;
+	int db_id;
 	unsigned nptemplate:16;
 	unsigned nparams:16;
 	unsigned method:16;
@@ -305,7 +306,9 @@ struct kopou_server {
 	time_t conns_last_cron_ts;
 
 	pid_t pid;
+	pid_t saver;
 
+	int ndbs;
 	time_t current_time;
 	int shutdown;
 	int hlistener;
@@ -331,12 +334,12 @@ typedef struct _kopou_db {
 typedef struct kopou_db {
 	_kopou_db_t *main;
 	unsigned long dirty;
-	pid_t background;
+	int id;
 	int enable_resize;
 } kopou_db_t;
 
-kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
-		_keycomparer kc);
+kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
+			_hashfunction hf, _keycomparer kc);
 void kdb_del(kopou_db_t *db);
 void *kdb_get(kopou_db_t *db, kstr_t key);
 int kdb_exist(kopou_db_t *db, kstr_t key);
@@ -355,9 +358,15 @@ static inline void kdb_disable_resize(kopou_db_t *db)
 	db->enable_resize = 0;
 }
 
+/* main */
+extern kopou_db_t **dbs;
+static inline kopou_db_t *get_db(int id)
+{
+	return dbs[id];
+}
+
 
 /* bucket.c */
-extern kopou_db_t *bucketdb;
 int execute_command(kconnection_t *c);
 int bucket_put_cmd(kconnection_t *c);
 int bucket_get_cmd(kconnection_t *c);
@@ -367,7 +376,6 @@ int favicon_get_cmd(kconnection_t *c);
 int stats_get_cmd(kconnection_t *c);
 
 /* version.c */
-extern kopou_db_t *versiondb;
 
 /* settings.c */
 int settings_from_file(const kstr_t filename);

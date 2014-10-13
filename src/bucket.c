@@ -14,6 +14,8 @@ int bucket_put_cmd(kconnection_t *c)
 	kstr_t k;
 	bucket_obj_t *o, *oo;
 	kbuffer_t *b;
+	kopou_db_t *bucketdb;
+
 	size_t s, cs;
 	int re;
 
@@ -42,6 +44,8 @@ int bucket_put_cmd(kconnection_t *c)
 		b = b->next;
 	}
 
+	bucketdb = get_db(r->cmd->db_id);
+
 	if (kdb_exist(bucketdb, k)) {
 		re = kdb_upd(bucketdb, k, o, (void**)&oo);
 		if (re == K_OK) {
@@ -67,9 +71,12 @@ int bucket_head_cmd(kconnection_t *c)
 	kstr_t k;
 	khttp_request_t *r;
 	bucket_obj_t *o;
+	kopou_db_t *bucketdb;
 
 	r = c->req;
 	k = r->cmd->params[0];
+
+	bucketdb = get_db(r->cmd->db_id);
 
 	o = kdb_get(bucketdb, k);
 	if (!o) {
@@ -87,10 +94,12 @@ int bucket_get_cmd(kconnection_t *c)
 	khttp_request_t *r;
 	bucket_obj_t *o;
 	kbuffer_t *b;
+	kopou_db_t *bucketdb;
 	char cl[64], ct[128];
 
 	r = c->req;
 	k = r->cmd->params[0];
+	bucketdb = get_db(r->cmd->db_id);
 
 	o = kdb_get(bucketdb, k);
 	if (!o) {
@@ -122,9 +131,12 @@ int bucket_delete_cmd(kconnection_t *c)
 	kstr_t k;
 	khttp_request_t *r;
 	bucket_obj_t *o = NULL;
+	kopou_db_t *bucketdb;
 
 	r = c->req;
 	k = r->cmd->params[0];
+	bucketdb = get_db(r->cmd->db_id);
+
 
 	if (kdb_rem(bucketdb, k, (void**)&o) == K_ERR) {
 		reply_404(c);
