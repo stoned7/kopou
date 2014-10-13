@@ -12,9 +12,7 @@
 struct kopou_server kopou;
 struct kopou_settings settings;
 struct kopou_stats stats;
-
-kopou_db_t *bucketdb;
-kopou_db_t *versiondb;
+kopou_db_t **dbs;
 
 static map_t *cmds_table;
 
@@ -46,10 +44,13 @@ int generic_kc(const kstr_t key1, const kstr_t key2)
 
 static void init_dbs(void)
 {
-	/* db size should be power of 2 always */
-	bucketdb = kdb_new(1024, 5, generic_hf, generic_kc);
-	versiondb = kdb_new(512, 5, generic_hf, generic_kc);
+	int i;
+	dbs = xcalloc(kopou.ndbs, sizeof(kopou_db_t*));
+	for (i = 0; i < kopou.ndbs; i++) {
+		dbs[i] = kdb_new(i, 16, 5, generic_hf, generic_kc);
+	}
 }
+
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
@@ -104,7 +105,7 @@ static void init_cmds_table(void)
 	nt = 2;
 	p = 1;
 	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
-	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD,
+	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .db_id = 0,
 		.execute = bucket_head_cmd, .nptemplate = nt, .nparams = p,
 		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
 			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
@@ -114,7 +115,7 @@ static void init_cmds_table(void)
 	headbucket->params = xcalloc(p, sizeof(kstr_t));
 
 	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
-	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET,
+	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .db_id = 0,
 		.execute = bucket_get_cmd, .nptemplate = nt, .nparams = p,
 		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
 			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
@@ -125,7 +126,7 @@ static void init_cmds_table(void)
 	headbucket->next = getbucket;
 
 	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
-	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT,
+	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .db_id = 0,
 		.execute = bucket_put_cmd, .nptemplate = nt, .nparams = p,
 		.flag = KCMD_WRITE_ONLY };
 	putbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
@@ -136,7 +137,7 @@ static void init_cmds_table(void)
 
 	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
 	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .execute =
-		bucket_delete_cmd, .nptemplate = nt, .nparams = p,
+		bucket_delete_cmd, .nptemplate = nt, .nparams = p, .db_id = 0,
 		.flag = KCMD_WRITE_ONLY | KCMD_SKIP_REQUEST_BODY };
 	delbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
 	delbucket->ptemplate[0] = bucket_name;
@@ -153,7 +154,7 @@ static void init_cmds_table(void)
 	nt=2;
 	p=1;
 	kcommand_t *putversion = xmalloc(sizeof(kcommand_t));
-	*putversion = (kcommand_t){.method = HTTP_METHOD_PUT, .execute = NULL,
+	*putversion = (kcommand_t){.method = HTTP_METHOD_PUT, .execute = NULL, .db_id = 1,
 		.nptemplate = nt, .nparams = p, .flag = KCMD_WRITE_ONLY };
 	putversion->ptemplate = xcalloc(nt, sizeof(kstr_t));
 	putversion->ptemplate[0] = version_name;
@@ -168,7 +169,8 @@ static void init_cmds_table(void)
 	p = 0;
 	kcommand_t *stats = xmalloc(sizeof(kcommand_t));
 	*stats = (kcommand_t){.method = HTTP_METHOD_GET, .next = NULL,
-		.execute = stats_get_cmd, .nptemplate = nt, .nparams = p,
+		.db_id = -1, .execute = stats_get_cmd, .nptemplate = nt,
+		.nparams = p,
 		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
 			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
 	stats->ptemplate = xcalloc(nt, sizeof(kstr_t));
@@ -181,7 +183,8 @@ static void init_cmds_table(void)
 	p = 0;
 	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
 	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .nparams = p,
-		.execute = favicon_get_cmd, .next = NULL, .nptemplate = nt,
+		.db_id = -1, .execute = favicon_get_cmd, .next = NULL,
+		.nptemplate = nt,
 		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
 		KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST | KCMD_RESPONSE_CACHABLE };
 	favicon->ptemplate = xcalloc(nt, sizeof(kstr_t));
@@ -215,6 +218,7 @@ static void init_globals(int bg)
 	kopou.conns = NULL;
 	kopou.tconns = 0;
 	kopou.conns_last_cron_ts = kopou.current_time;
+	kopou.ndbs = 2;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -389,13 +393,13 @@ static int setup_sighandler_asyncworkers(void)
 
 static void db_expand_cron(void)
 {
-	int r;
-	r = kdb_try_expand(bucketdb);
-	if (r == K_OK)
-		klog(KOPOU_DEBUG, "resizing bucketdb");
-	r = kdb_try_expand(versiondb);
-	if (r == K_OK)
-		klog(KOPOU_DEBUG, "resizing versiondb");
+	int r, i;
+
+	for (i = 0; i < kopou.ndbs; i++) {
+		r = kdb_try_expand(get_db(i));
+		if (r == K_OK)
+			klog(KOPOU_DEBUG, "resizing db %d", i);
+	}
 }
 
 
@@ -404,8 +408,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
 
-	db_expand_cron();
 	kopou.current_time = time(NULL);
+	db_expand_cron();
 
 	/* triger backup if required*/
 }
@@ -501,9 +505,6 @@ static void kopou_cron(int fd, eventtype_t evtype)
 	db_expand_cron();
 	connection_cron();
 
-	/* check cli req continue timeout/idle time
-	 * clean them if required
-	 */
 
 	/* triger dbbackup if required*/
 

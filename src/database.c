@@ -1,7 +1,7 @@
 #include "kopou.h"
 
-kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
-		_keycomparer kc)
+kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
+			_hashfunction hf, _keycomparer kc)
 {
 	kopou_db_t *db = xmalloc(sizeof(kopou_db_t));
 	db->main = xmalloc(sizeof(_kopou_db_t));
@@ -12,8 +12,8 @@ kopou_db_t *kdb_new(unsigned long size, int loadfactor, _hashfunction hf,
 	db->main->loadfactor = loadfactor;
 	db->main->rehashpos = -1;
 	db->dirty = 0;
-	db->background = -1;
 	db->enable_resize = 1;
+	db->id = id;
 	return db;
 }
 
