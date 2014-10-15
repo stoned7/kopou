@@ -36,6 +36,19 @@ def bucket_create_json(url):
         res = s.send(prepped)    
         print '{} {}, {}'.format(res.status_code, res.reason, str(res.elapsed))
 
+def bucket_create_bulk(baseurl):
+
+    for i in range(0, 1000000):
+        url = baseurl + '/bucket/_codedeploplyment_user_key' + str(i)
+        payload = '{"name": "sujan dutta' + str(i) + '", "district": "sibsagar' + str(i) + '"}'
+        headers = {'Content-Type':'Application/Json'}
+        headers['Content-Length'] = len(payload);
+        headers['Connection'] = 'close';
+        res = requests.put(url, headers=headers, data=payload)
+        print '{}: {} {}, {}'.format(i, res.status_code, res.reason, str(res.elapsed))
+        url = ''
+        
+
 
 def bucket_create(url):
 
@@ -74,6 +87,8 @@ def main(args):
     elif args[0] == 'i':
         bucket_create_image(baseurl)
         bucket_create_json(baseurl)
+    elif args[0] == 'b':
+        bucket_create_bulk(baseurl)
 
     return 0
 

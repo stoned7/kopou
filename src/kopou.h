@@ -7,6 +7,8 @@
 #include <string.h>
 #include <time.h>
 #include <sys/timerfd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 #include "common.h"
 #include "kstring.h"
@@ -287,6 +289,8 @@ struct kopou_settings {
 	int http_close_connection_onerror;
 	int cron_interval;
 	int conns_cron_interval;
+	int db_backup_interval;
+	int db_resize_interval;
 };
 
 struct kopou_stats {
@@ -307,6 +311,8 @@ struct kopou_server {
 
 	pid_t pid;
 	pid_t saver;
+	time_t saver_complete_ts;
+	int saver_status;
 
 	int ndbs;
 	time_t current_time;
@@ -314,6 +320,7 @@ struct kopou_server {
 	int hlistener;
 	int klistener;
 	int cronfd;
+	int can_db_resize;
 };
 
 /* main */
@@ -324,19 +331,30 @@ kcommand_t* get_matched_cmd(kconnection_t *c);
 kbuffer_t *create_kbuffer(size_t size);
 
 /* dbs */
-typedef struct _kopou_db {
+struct kopou_db_s {
 	aarray_t *primary;
 	aarray_t *secondary;
 	long rehashpos;
 	int loadfactor;
-} _kopou_db_t;
+};
 
 typedef struct kopou_db {
-	_kopou_db_t *main;
+	struct kopou_db_s *main;
+	int (*backup_hdd)(struct kopou_db *db);
 	unsigned long dirty;
+	unsigned long dirty_considered;
 	int id;
-	int enable_resize;
+	time_t resize_done_ts;
 } kopou_db_t;
+
+/*
+typedef struct {
+	kopou_db_t *db;
+	unsigned long index;
+	void *ele;
+} kopou_db_iter_t;
+*/
+
 
 kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 			_hashfunction hf, _keycomparer kc);
@@ -348,18 +366,13 @@ int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
 int kdb_try_expand(kopou_db_t *db);
 
-static inline void kdb_enable_resize(kopou_db_t *db)
-{
-	db->enable_resize = 1;
-}
-
-static inline void kdb_disable_resize(kopou_db_t *db)
-{
-	db->enable_resize = 0;
-}
 
 /* main */
 extern kopou_db_t **dbs;
+int execute_command(kconnection_t *c);
+uint32_t generic_hf(const kstr_t key);
+int generic_kc(const kstr_t key1, const kstr_t key2);
+
 static inline kopou_db_t *get_db(int id)
 {
 	return dbs[id];
@@ -367,7 +380,7 @@ static inline kopou_db_t *get_db(int id)
 
 
 /* bucket.c */
-int execute_command(kconnection_t *c);
+kopou_db_t *bucket_init(int id);
 int bucket_put_cmd(kconnection_t *c);
 int bucket_get_cmd(kconnection_t *c);
 int bucket_head_cmd(kconnection_t *c);
@@ -376,6 +389,7 @@ int favicon_get_cmd(kconnection_t *c);
 int stats_get_cmd(kconnection_t *c);
 
 /* version.c */
+kopou_db_t *version_init(int id);
 
 /* settings.c */
 int settings_from_file(const kstr_t filename);
@@ -408,6 +422,11 @@ void reply_201(kconnection_t *c); //created
 void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
+/* bgsaver.c */
+size_t bgs_write(FILE *f, const void *b, size_t len);
+size_t bgs_read(FILE *f, void *b, size_t len);
+void bgs_save_async(void);
+void bgs_save_status(void);
 
 static inline void get_http_date(char *buf, size_t len)
 {

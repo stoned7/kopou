@@ -4,7 +4,7 @@ kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 			_hashfunction hf, _keycomparer kc)
 {
 	kopou_db_t *db = xmalloc(sizeof(kopou_db_t));
-	db->main = xmalloc(sizeof(_kopou_db_t));
+	db->main = xmalloc(sizeof(struct kopou_db_s));
 	db->main->primary = aarray_new(size, hf, kc, NULL);
 	if (!db->main->primary)
 		_kdie("primary db creation fail");
@@ -12,8 +12,10 @@ kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 	db->main->loadfactor = loadfactor;
 	db->main->rehashpos = -1;
 	db->dirty = 0;
-	db->enable_resize = 1;
+	db->dirty_considered = 0;
 	db->id = id;
+	db->resize_done_ts = kopou.current_time;
+	db->backup_hdd = NULL;
 	return db;
 }
 
@@ -118,6 +120,7 @@ static int _expand(kopou_db_t *db)
 		aarray_fdel(db->main->primary);
 		db->main->primary = db->main->secondary;
 		db->main->secondary = NULL;
+		db->resize_done_ts = kopou.current_time;
 	}
 
 	return K_OK;
@@ -128,27 +131,37 @@ int kdb_try_expand(kopou_db_t *db)
 	int f;
 	unsigned long c, n, t;
 
-	if (!db->enable_resize) return K_AGAIN;
-
 	if (_rehashing(db))
 		return _expand(db);
 
 	c = aarray_size(db->main->primary);
-	t = aarray_total_elements(db->main->primary);
+	if (c >= LONG_MAX)
+		return K_AGAIN;
 
-	if (c > t) return K_AGAIN;
+	t = aarray_total_elements(db->main->primary);
+	if (c > t)
+		return K_AGAIN;
+
+
+	if (difftime(kopou.current_time, db->resize_done_ts)
+		< settings.db_resize_interval)
+		return K_AGAIN;
 
 	f = t / c;
-	if (f <= db->main->loadfactor) return K_AGAIN;
-
-	if (c >= LONG_MAX) n = LONG_MAX;
-	else n = c << 1;
+	if (f <= db->main->loadfactor)
+		return K_AGAIN;
+	do {
+		n = c << 1;
+		if (n > LONG_MAX) {
+			n = LONG_MAX;
+			break;
+		}
+		f = t/n;
+		c = n;
+	} while (f > db->main->loadfactor);
 
 	db->main->secondary = aarray_new(n, db->main->primary->hf,
 					db->main->primary->kc, NULL);
 	db->main->rehashpos = 0;
-
 	return _expand(db);
 }
-
-

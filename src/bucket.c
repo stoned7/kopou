@@ -8,6 +8,20 @@ typedef struct {
 
 char stats_format[] = "{\"objects\":%zu, \"bytes\":%zu, \"missed\":%zu, \"hits\":%zu, \"deleted\":%zu}";
 
+static int bucket_backup_hdd(kopou_db_t *db)
+{
+	K_FORCE_USE(db);
+	return K_OK;
+}
+
+kopou_db_t *bucket_init(int id)
+{
+	kopou_db_t *db;
+	db = kdb_new(id, 16, 5, generic_hf, generic_kc);
+	db->backup_hdd = bucket_backup_hdd;
+	return db;
+}
+
 int bucket_put_cmd(kconnection_t *c)
 {
 	khttp_request_t *r;

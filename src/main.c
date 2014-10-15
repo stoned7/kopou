@@ -44,13 +44,13 @@ int generic_kc(const kstr_t key1, const kstr_t key2)
 
 static void init_dbs(void)
 {
-	int i;
 	dbs = xcalloc(kopou.ndbs, sizeof(kopou_db_t*));
-	for (i = 0; i < kopou.ndbs; i++) {
-		dbs[i] = kdb_new(i, 16, 5, generic_hf, generic_kc);
-	}
-}
+	dbs[kopou.ndbs] = bucket_init(kopou.ndbs);
+	kopou.ndbs++;
 
+	dbs[kopou.ndbs] = version_init(kopou.ndbs);
+	kopou.ndbs++;
+}
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
@@ -203,7 +203,6 @@ int execute_command(kconnection_t *c)
 	return r->cmd->execute(c);
 }
 
-
 static void init_globals(int bg)
 {
 	kopou.pid = getpid();
@@ -218,7 +217,11 @@ static void init_globals(int bg)
 	kopou.conns = NULL;
 	kopou.tconns = 0;
 	kopou.conns_last_cron_ts = kopou.current_time;
-	kopou.ndbs = 2;
+	kopou.ndbs = 0;
+	kopou.can_db_resize = 1;
+	kopou.saver = -1;
+	kopou.saver_status = K_AGAIN;
+	kopou.saver_complete_ts = kopou.current_time;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -238,6 +241,8 @@ static void init_globals(int bg)
 	settings.cron_interval = 500;
 	settings.http_req_continue_timeout = 5.0;
 	settings.conns_cron_interval = 2.0;
+	settings.db_resize_interval = 10.0;
+	settings.db_backup_interval = 2.0;
 
 
 	stats.objects = 0;
@@ -252,7 +257,6 @@ static void kopou_oom_handler(size_t size)
 	_kdie("out of memory, total memory used: %lu bytes"
 		"and fail to alloc:%lu bytes", stats.space, size);
 }
-
 
 static void usages(char *name)
 {
@@ -393,15 +397,40 @@ static int setup_sighandler_asyncworkers(void)
 
 static void db_expand_cron(void)
 {
-	int r, i;
-
-	for (i = 0; i < kopou.ndbs; i++) {
-		r = kdb_try_expand(get_db(i));
-		if (r == K_OK)
-			klog(KOPOU_DEBUG, "resizing db %d", i);
+	int i;
+	if (kopou.can_db_resize) {
+		for (i = 0; i < kopou.ndbs; i++)
+			kdb_try_expand(get_db(i));
 	}
 }
 
+static void db_backup_cron(void)
+{
+	kopou_db_t *db;
+	int i, rs;
+
+	if (kopou.saver != -1) {
+		bgs_save_status();
+		return;
+	}
+
+	if (difftime(kopou.current_time, kopou.saver_complete_ts)
+		< settings.db_backup_interval)
+		return;
+
+	rs = 0;
+	for (i = 0; i < kopou.ndbs; i++) {
+		db = get_db(i);
+		if (db->backup_hdd && db->dirty > 0) {
+			db->dirty_considered = db->dirty;
+			if (!rs)
+				rs = 1;
+		}
+	}
+
+	if (rs)
+		bgs_save_async();
+}
 
 static void loop_prepoll_handler(kevent_loop_t *ev)
 {
@@ -409,9 +438,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 		kevent_loop_stop(ev);
 
 	kopou.current_time = time(NULL);
-	db_expand_cron();
+	//db_expand_cron();
 
-	/* triger backup if required*/
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
@@ -486,7 +514,6 @@ static void connection_cron(void)
 	kopou.conns_last_cron_ts = kopou.current_time;
 }
 
-
 static void kopou_cron(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(fd);
@@ -502,11 +529,9 @@ static void kopou_cron(int fd, eventtype_t evtype)
 
 	kopou.current_time = time(NULL);
 
+	db_backup_cron();
 	db_expand_cron();
 	connection_cron();
-
-
-	/* triger dbbackup if required*/
 
 }
 

@@ -13,3 +13,9 @@ typedef struct _version_obj {
 } version_obj_t;
 
 
+kopou_db_t *version_init(int id)
+{
+	kopou_db_t *db;
+	db = kdb_new(id, 16, 5, generic_hf, generic_kc);
+	return db;
+}

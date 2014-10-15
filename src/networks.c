@@ -273,6 +273,7 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 			return HTTP_OK;
 		} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, v, vl)) {
 			r->connection_keepalive = 1;
+			r->connection_close = 0;
 			return HTTP_OK;
 		}
 	} else if (!strncasecmp(HTTP_CONTENT_LENGTH, h, hl)) {
