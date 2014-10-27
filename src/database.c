@@ -214,7 +214,8 @@ static aarray_element_t *kdb_iter_get_next_index(kopou_db_iter_t *it)
 	return NULL;
 }
 
-void* kdb_iter_foreach(kopou_db_iter_t *it)
+
+int kdb_iter_foreach(kopou_db_iter_t *it, kstr_t *k, void **o)
 {
 	aarray_element_t *cur;
 
@@ -222,17 +223,29 @@ void* kdb_iter_foreach(kopou_db_iter_t *it)
 	if (cur == NULL) {
 		cur = kdb_iter_get_next_index(it);
 		it->cur = cur;
-		return cur;
+		if (cur) {
+			*k = aarray_element_key(cur);
+			*o = aarray_element_data(cur);
+			return 1;
+		}
+		return 0;
 	}
 
 	cur = aarray_element_next(cur);
 	if (cur) {
 		it->cur = cur;
-		return cur;
+		*k = aarray_element_key(cur);
+		*o = aarray_element_data(cur);
+		return 1;
 	}
 
 	cur = kdb_iter_get_next_index(it);
 	it->cur = cur;
-	return cur;
+	if (cur) {
+		*k = aarray_element_key(cur);
+		*o = aarray_element_data(cur);
+		return 1;
+	}
+	return 0;
 }
 

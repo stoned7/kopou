@@ -16,6 +16,23 @@ typedef struct {
 
 char stats_format[] = "{\"objects\":%zu, \"bytes\":%zu, \"missed\":%zu, \"hits\":%zu, \"deleted\":%zu}";
 
+int bucket_backup_objects(FILE *fp, kopou_db_t *db)
+{
+	kopou_db_iter_t *iter;
+	kstr_t key;
+	bucket_obj_t *obj;
+
+	iter = kdb_iter_new(db);
+
+	while (kdb_iter_foreach(iter, &key, (void**)&obj)) {
+
+	}
+
+	kdb_iter_del(iter);
+	return K_OK;
+}
+
+
 /* this routine run async, care about cow */
 static int bucket_backup_hdd(kopou_db_t *db)
 {
