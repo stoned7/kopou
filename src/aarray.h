@@ -60,6 +60,11 @@ static inline kstr_t aarray_element_key(const aarray_element_t *ele)
 	return ele->key;
 }
 
+static inline aarray_element_t *aarray_element_next(const aarray_element_t *ele)
+{
+	return ele->next;
+}
+
 static inline void aarray_fdel(aarray_t *aa)
 {
 	xfree(aa->buckets);

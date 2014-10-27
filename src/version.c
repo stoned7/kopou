@@ -19,3 +19,8 @@ kopou_db_t *version_init(int id)
 	db = kdb_new(id, 16, 5, generic_hf, generic_kc);
 	return db;
 }
+
+void version_init_cmds_table(int db_id)
+{
+	K_FORCE_USE(db_id);
+}

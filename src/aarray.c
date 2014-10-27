@@ -55,26 +55,29 @@ static aarray_element_t *_aarray_find(aarray_t *aa, const kstr_t key,
 
 void *aarray_find(aarray_t *aa, const kstr_t key)
 {
+	aarray_element_t *ele;
 	unsigned long index;
 	uint32_t hkey;
 
 	hkey = aa->hf(key);
 	index = hkey & aa->mask;
 
-	aarray_element_t *ele = _aarray_find(aa, key, index);
-	if (ele) return aarray_element_data(ele);
+	ele = _aarray_find(aa, key, index);
+	if (ele)
+		return aarray_element_data(ele);
 	return NULL;
 }
 
 int aarray_exist(aarray_t *aa, const kstr_t key)
 {
+	aarray_element_t *ele;
 	unsigned long index;
 	uint32_t hkey;
 
 	hkey = aa->hf(key);
 	index = hkey & aa->mask;
 
-	aarray_element_t *ele = _aarray_find(aa, key, index);
+	ele = _aarray_find(aa, key, index);
 	return (ele != NULL);
 }
 

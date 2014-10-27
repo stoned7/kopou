@@ -4,6 +4,7 @@ kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 			_hashfunction hf, _keycomparer kc)
 {
 	kopou_db_t *db = xmalloc(sizeof(kopou_db_t));
+
 	db->main = xmalloc(sizeof(struct kopou_db_s));
 	db->main->primary = aarray_new(size, hf, kc, NULL);
 	if (!db->main->primary)
@@ -11,11 +12,20 @@ kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 	db->main->secondary = NULL;
 	db->main->loadfactor = loadfactor;
 	db->main->rehashpos = -1;
+
 	db->dirty = 0;
 	db->dirty_considered = 0;
 	db->id = id;
 	db->resize_done_ts = kopou.current_time;
 	db->backup_hdd = NULL;
+
+	db->stats =  xmalloc(sizeof(kopou_db_stats_t));
+	db->stats->objects = 0;
+	db->stats->missed = 0;
+	db->stats->hits = 0;
+	db->stats->deleted = 0;
+	db->stats->space = 0;
+
 	return db;
 }
 
@@ -25,10 +35,11 @@ void kdb_del(kopou_db_t *db)
 		aarray_del(db->main->secondary);
 	aarray_del(db->main->primary);
 	xfree(db->main);
+	xfree(db->stats);
 	xfree(db);
 }
 
-static inline int _rehashing(kopou_db_t *db)
+static inline int kdb_rehashing(kopou_db_t *db)
 {
 	return (db->main->rehashpos != -1);
 }
@@ -38,20 +49,17 @@ void *kdb_get(kopou_db_t *db, kstr_t key)
 	void *o;
 
 	o = aarray_find(db->main->primary, key);
-	if (!o && _rehashing(db))
+	if (!o && kdb_rehashing(db))
 		o = aarray_find(db->main->secondary, key);
-
-	if (o == NULL) stats.missed++;
-	else stats.hits++;
-
 	return o;
 }
 
 int kdb_exist(kopou_db_t *db, kstr_t key)
 {
 	int r;
+
 	r = aarray_exist(db->main->primary, key);
-	if (!r && _rehashing(db))
+	if (!r && kdb_rehashing(db))
 		r = aarray_exist(db->main->secondary, key);
 	return r;
 }
@@ -60,41 +68,30 @@ int kdb_add(kopou_db_t *db, kstr_t key, void *obj)
 {
 	int r;
 
-	if (_rehashing(db))
+	if (kdb_rehashing(db))
 		r = aarray_add(db->main->secondary, key, obj);
 	else
 		r = aarray_add(db->main->primary, key, obj);
-
-	if (r == AA_OK) {
-		db->dirty++;
-		stats.objects++;
-	}
 	return r;
 }
 
 int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj)
 {
 	int r;
-	r = aarray_upd(db->main->primary, key, obj, oobj);
-	if (r == AA_ERR && _rehashing(db)) {
-		r = aarray_upd(db->main->secondary, key, obj, oobj);
-	}
 
-	if (r == AA_OK) db->dirty++;
+	r = aarray_upd(db->main->primary, key, obj, oobj);
+	if (r == AA_ERR && kdb_rehashing(db))
+		r = aarray_upd(db->main->secondary, key, obj, oobj);
 	return r;
 }
 
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj)
 {
 	int r;
-	r = aarray_rem(db->main->primary, key, obj);
-	if (r == AA_ERR && _rehashing(db))
-		r = aarray_rem(db->main->primary, key, obj);
 
-	if (r == AA_OK) {
-		db->dirty++;
-		stats.objects--;
-	}
+	r = aarray_rem(db->main->primary, key, obj);
+	if (r == AA_ERR && kdb_rehashing(db))
+		r = aarray_rem(db->main->primary, key, obj);
 	return r;
 }
 
@@ -131,7 +128,7 @@ int kdb_try_expand(kopou_db_t *db)
 	int f;
 	unsigned long c, n, t;
 
-	if (_rehashing(db))
+	if (kdb_rehashing(db))
 		return _expand(db);
 
 	c = aarray_size(db->main->primary);
@@ -165,3 +162,77 @@ int kdb_try_expand(kopou_db_t *db)
 	db->main->rehashpos = 0;
 	return _expand(db);
 }
+
+kopou_db_iter_t *kdb_iter_new(kopou_db_t *db)
+{
+	kopou_db_iter_t *it = xmalloc(sizeof(kopou_db_iter_t));
+	it->db = db;
+	it->index = -1;
+	it->aa = db->main->primary;
+	it->cur = NULL;
+	it->jumped = 0;
+	return it;
+}
+
+void kdb_iter_reset(kopou_db_iter_t *it, kopou_db_t *db)
+{
+	it->db = db;
+	it->index = -1;
+	it->aa = db->main->primary;
+	it->cur = NULL;
+	it->jumped = 0;
+}
+
+void kdb_iter_del(kopou_db_iter_t *it)
+{
+	xfree(it);
+}
+
+static aarray_element_t *kdb_iter_get_next_index(kopou_db_iter_t *it)
+{
+	aarray_element_t *cur;
+
+	it->index += 1;
+	while (it->index < aarray_size(it->aa)) {
+		cur = it->aa->buckets[it->index];
+		if (cur)
+			return cur;
+		it->index += 1;
+	}
+
+	if (!it->jumped && !it->db->main->secondary) {
+		it->jumped = 1;
+		it->aa = it->db->main->secondary;
+		it->index = 0;
+		while (it->index < aarray_size(it->aa)) {
+			cur = it->aa->buckets[it->index];
+			if (cur)
+				return cur;
+			it->index += 1;
+		}
+	}
+	return NULL;
+}
+
+void* kdb_iter_foreach(kopou_db_iter_t *it)
+{
+	aarray_element_t *cur;
+
+	cur = it->cur;
+	if (cur == NULL) {
+		cur = kdb_iter_get_next_index(it);
+		it->cur = cur;
+		return cur;
+	}
+
+	cur = aarray_element_next(cur);
+	if (cur) {
+		it->cur = cur;
+		return cur;
+	}
+
+	cur = kdb_iter_get_next_index(it);
+	it->cur = cur;
+	return cur;
+}
+

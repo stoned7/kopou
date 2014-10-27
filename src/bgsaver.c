@@ -1,43 +1,47 @@
 #include "kopou.h"
 
-static size_t _bgs_write(FILE *f, const void *b, size_t len)
+#define BG_RW_SIZE_MAX 1024
+
+static int _bgs_write(FILE *f, const void *b, size_t len)
 {
-	size_t r;
-	r = fwrite(b, len, 1, f);
-	return r;
+	int w;
+	w = fwrite(b, len, 1, f);
+	return w;
 }
 
-size_t bgs_write(FILE *f, const void *b, size_t len)
+int bgs_write(FILE *f, const void *b, size_t len)
 {
-	size_t nw;
-
+	size_t wlen;
 	while (len) {
-		if ((nw = _bgs_write(f, b, len)) == 0)
-			return K_ERR;
-		len -= nw;
-		b = (char*)b + nw;
+		wlen = len < BG_RW_SIZE_MAX
+			? len : BG_RW_SIZE_MAX;
+		if (_bgs_write(f, b, wlen) == 0)
+			return 0;
+		len -= wlen;
+		b += wlen;
 	}
-
-	return nw;
+	return 1;
 }
 
-static size_t _bgs_read(FILE *f, void *b, size_t len)
+static int _bgs_read(FILE *f, void *b, size_t len)
 {
-	size_t r;
+	int r;
 	r = fread(b, len, 1, f);
 	return r;
 }
 
-size_t bgs_read(FILE *f, void *b, size_t len)
+int bgs_read(FILE *f, void *b, size_t len)
 {
-	size_t nr;
+	size_t rlen;
 	while (len) {
-		if ((nr = _bgs_read(f, b, len)) == 0)
-			if (ferror(f)) return K_ERR;
-		len -= nr;
-		b = (char*)b + nr;
+		rlen = len < BG_RW_SIZE_MAX
+			? len : BG_RW_SIZE_MAX;
+		if (_bgs_read(f, b, rlen) == 0)
+			return 0;
+		len -= rlen;
+		b += rlen;
 	}
-	return nr;
+	return 1;
 }
 
 void bgs_save_async(void)
@@ -100,7 +104,6 @@ void bgs_save_status(void)
 		klog(KOPOU_ERR, "saver return errror, pid %d", pid);
 		kopou.saver_status = K_ERR;
 	} else {
-		/*TODO: remove the temp file */
 		klog(KOPOU_ERR, "saver stoped by signal, pid %d, signal %d",
 				pid, exit_signal);
 		if (exit_signal != SIGUSR1)
