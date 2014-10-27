@@ -346,14 +346,6 @@ typedef struct kopou_db {
 	time_t resize_done_ts;
 } kopou_db_t;
 
-typedef struct {
-	kopou_db_t *db;
-	aarray_t *aa;
-	aarray_element_t *cur;
-	unsigned long index;
-	int jumped;
-} kopou_db_iter_t;
-
 kopou_db_t *kdb_new(int id, unsigned long size, int loadfactor,
 			_hashfunction hf, _keycomparer kc);
 void kdb_del(kopou_db_t *db);
@@ -364,8 +356,16 @@ int kdb_upd(kopou_db_t *db, kstr_t key, void *obj, void **oobj);
 int kdb_rem(kopou_db_t *db, kstr_t key, void **obj);
 int kdb_try_expand(kopou_db_t *db);
 
+typedef struct {
+	kopou_db_t *db;
+	aarray_t *aa;
+	aarray_element_t *cur;
+	unsigned long index;
+	int jumped;
+} kopou_db_iter_t;
+
 kopou_db_iter_t *kdb_iter_new(kopou_db_t *db);
-void* kdb_iter_foreach(kopou_db_iter_t *it);
+int kdb_iter_foreach(kopou_db_iter_t *it, kstr_t *k, void **o);
 void kdb_iter_del(kopou_db_iter_t *it);
 
 /* main */
@@ -373,6 +373,7 @@ extern struct kopou_server kopou;
 extern struct kopou_settings settings;
 extern map_t *cmds_table;
 extern kopou_db_t **dbs;
+
 int execute_command(kconnection_t *c);
 uint32_t generic_hf(const kstr_t key);
 int generic_kc(const kstr_t key1, const kstr_t key2);
@@ -383,7 +384,6 @@ static inline kopou_db_t *get_db(int id)
 {
 	return dbs[id];
 }
-
 
 /* bucket.c */
 kopou_db_t *bucket_init(int id);
