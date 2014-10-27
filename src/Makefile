@@ -32,7 +32,7 @@ CWARN+=-Wvolatile-register-var
 COPT=-O2
 CFLAGS=-pthread
 CDEBUG=-g -ggdb
-SRC=aarray.c kevent.c main.c kstring.c list.c http.c settings.c tcp.c xalloc.c networks.c reply.c database.c map.c bucket.c jenkins_hash.c
+SRC=aarray.c kevent.c main.c kstring.c list.c http.c settings.c tcp.c xalloc.c networks.c reply.c database.c map.c bucket.c jenkins_hash.c bgsaver.c version.c
 HDR=aarray.h common.h kevent.h kopou.h kstring.h list.h tcp.h xalloc.h map.h jenkins_hash.h
 
 all: $(BINNAME) 

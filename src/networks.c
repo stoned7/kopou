@@ -84,6 +84,7 @@ void http_delete_connection(kconnection_t *c)
 
 		b = r->buf;
 		while (b) {
+			xfree(b->start);
 			tb = b->next;
 			xfree(b);
 			b = tb;
@@ -99,15 +100,19 @@ void http_delete_connection(kconnection_t *c)
 		for (i = 0; i < r->nsplitted_uri; i++)
 			kstr_del(r->splitted_uri[i]);
 
-		if (r->content_type) {
+		if (r->content_type)
 			kstr_del(r->content_type);
-			r->content_type = NULL;
-		}
 
 		for (i = 0; i < r->res->nheaders; i++)
 			kstr_del(r->res->headers[i]);
 
-		xfree(r->res->buf);
+		b = r->res->buf;
+		while (b) {
+			xfree(b->start);
+			tb = b->next;
+			xfree(b);
+			b = tb;
+		}
 		xfree(r->res);
 		xfree(r);
 	}
@@ -127,6 +132,7 @@ static void http_reset_request(kconnection_t *c)
 
 	b = r->buf;
 	while (b) {
+		xfree(b->start);
 		tb = b->next;
 		xfree(b);
 		b = tb;
@@ -194,7 +200,13 @@ static void http_reset_request(kconnection_t *c)
 	r->res->flag = 0;
 	r->res->size_hint = HTTP_RES_HEADERS_SIZE;
 
-	xfree(r->res->buf);
+	b = r->res->buf;
+	while (b) {
+		xfree(b->start);
+		tb = b->next;
+		xfree(b);
+		b = tb;
+	}
 	r->res->buf = r->res->curbuf = NULL;
 };
 
@@ -273,6 +285,7 @@ int http_set_system_header(khttp_request_t *r, char *h, int hl, char *v, int vl)
 			return HTTP_OK;
 		} else if (!strncasecmp(HTTP_CONN_KEEP_ALIVE, v, vl)) {
 			r->connection_keepalive = 1;
+			r->connection_close = 0;
 			return HTTP_OK;
 		}
 	} else if (!strncasecmp(HTTP_CONTENT_LENGTH, h, hl)) {

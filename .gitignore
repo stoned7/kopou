@@ -2,5 +2,6 @@
 *.log
 *.kpu
 *.pyc
+*.tmp
 kopou
 tags

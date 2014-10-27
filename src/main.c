@@ -11,10 +11,9 @@
 
 struct kopou_server kopou;
 struct kopou_settings settings;
-struct kopou_stats stats;
 kopou_db_t **dbs;
 
-static map_t *cmds_table;
+map_t *cmds_table;
 
 kbuffer_t *create_kbuffer(size_t size)
 {
@@ -44,13 +43,18 @@ int generic_kc(const kstr_t key1, const kstr_t key2)
 
 static void init_dbs(void)
 {
-	int i;
-	dbs = xcalloc(kopou.ndbs, sizeof(kopou_db_t*));
-	for (i = 0; i < kopou.ndbs; i++) {
-		dbs[i] = kdb_new(i, 16, 5, generic_hf, generic_kc);
-	}
-}
+	cmds_table = map_new(NULL);
 
+	dbs = xcalloc(kopou.ndbs, sizeof(kopou_db_t*));
+	dbs[kopou.ndbs] = bucket_init(kopou.ndbs);
+	bucket_init_cmds_table(kopou.ndbs);
+	kopou.ndbs++;
+
+	dbs[kopou.ndbs] = version_init(kopou.ndbs);
+	version_init_cmds_table(kopou.ndbs);
+
+	kopou.ndbs++;
+}
 
 static int match_uri(kcommand_t *cmd, khttp_request_t *r)
 {
@@ -94,115 +98,16 @@ kcommand_t *get_matched_cmd(kconnection_t *c)
 	return NULL;
 }
 
-static void init_cmds_table(void)
-{
-	unsigned nt, p;
-
-	cmds_table = map_new(NULL);
-
-	/* bucket */
-	kstr_t bucket_name = kstr_new("bucket");
-	nt = 2;
-	p = 1;
-	kcommand_t *headbucket = xmalloc(sizeof(kcommand_t));
-	*headbucket = (kcommand_t){ .method = HTTP_METHOD_HEAD, .db_id = 0,
-		.execute = bucket_head_cmd, .nptemplate = nt, .nparams = p,
-		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
-			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
-	headbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	headbucket->ptemplate[0] = bucket_name;
-	headbucket->ptemplate[1] = NULL;
-	headbucket->params = xcalloc(p, sizeof(kstr_t));
-
-	kcommand_t *getbucket = xmalloc(sizeof(kcommand_t));
-	*getbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .db_id = 0,
-		.execute = bucket_get_cmd, .nptemplate = nt, .nparams = p,
-		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
-			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
-	getbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	getbucket->ptemplate[0] = bucket_name;
-	getbucket->ptemplate[1] = NULL;
-	getbucket->params = xcalloc(p, sizeof(kstr_t));
-	headbucket->next = getbucket;
-
-	kcommand_t *putbucket = xmalloc(sizeof(kcommand_t));
-	*putbucket = (kcommand_t){ .method = HTTP_METHOD_PUT, .db_id = 0,
-		.execute = bucket_put_cmd, .nptemplate = nt, .nparams = p,
-		.flag = KCMD_WRITE_ONLY };
-	putbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	putbucket->ptemplate[0] = bucket_name;
-	putbucket->ptemplate[1] = NULL;
-	putbucket->params = xcalloc(p, sizeof(kstr_t));
-	getbucket->next = putbucket;
-
-	kcommand_t *delbucket = xmalloc(sizeof(kcommand_t));
-	*delbucket = (kcommand_t){ .method = HTTP_METHOD_DELETE, .execute =
-		bucket_delete_cmd, .nptemplate = nt, .nparams = p, .db_id = 0,
-		.flag = KCMD_WRITE_ONLY | KCMD_SKIP_REQUEST_BODY };
-	delbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	delbucket->ptemplate[0] = bucket_name;
-	delbucket->ptemplate[1] = NULL;
-	delbucket->params = xcalloc(p, sizeof(kstr_t));
-	putbucket->next = delbucket;
-
-	delbucket->next = NULL;
-	map_add(cmds_table, bucket_name, headbucket);
-
-	/* version */
-	/*
-	kstr_t version_name = kstr_new("version");
-	nt=2;
-	p=1;
-	kcommand_t *putversion = xmalloc(sizeof(kcommand_t));
-	*putversion = (kcommand_t){.method = HTTP_METHOD_PUT, .execute = NULL, .db_id = 1,
-		.nptemplate = nt, .nparams = p, .flag = KCMD_WRITE_ONLY };
-	putversion->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	putversion->ptemplate[0] = version_name;
-	putversion->ptemplate[1] = NULL;
-	putversion->params = xcalloc(p, sizeof(kstr_t));
-	putversion->nparams = p;
-	*/
-
-	/* stats */
-	kstr_t stats_name = kstr_new("stats");
-	nt = 1;
-	p = 0;
-	kcommand_t *stats = xmalloc(sizeof(kcommand_t));
-	*stats = (kcommand_t){.method = HTTP_METHOD_GET, .next = NULL,
-		.db_id = -1, .execute = stats_get_cmd, .nptemplate = nt,
-		.nparams = p,
-		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
-			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
-	stats->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	stats->ptemplate[0] = stats_name;
-	map_add(cmds_table, stats_name, stats);
-
-	/* favicon */
-	kstr_t favicon_name = kstr_new("favicon.ico");
-	nt = 1;
-	p = 0;
-	kcommand_t *favicon = xmalloc(sizeof(kcommand_t));
-	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .nparams = p,
-		.db_id = -1, .execute = favicon_get_cmd, .next = NULL,
-		.nptemplate = nt,
-		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
-		KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST | KCMD_RESPONSE_CACHABLE };
-	favicon->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	favicon->ptemplate[0] = favicon_name;
-	map_add(cmds_table, favicon_name, favicon);
-}
-
 int execute_command(kconnection_t *c)
 {
 	khttp_request_t *r = c->req;
-	if (stats.space > settings.readonly_memory_threshold
+	if (kopou.space > settings.readonly_memory_threshold
 		&& r->cmd->flag & KCMD_WRITE_ONLY) {
 			reply_403(c);
 			return K_OK;
 	}
 	return r->cmd->execute(c);
 }
-
 
 static void init_globals(int bg)
 {
@@ -218,7 +123,12 @@ static void init_globals(int bg)
 	kopou.conns = NULL;
 	kopou.tconns = 0;
 	kopou.conns_last_cron_ts = kopou.current_time;
-	kopou.ndbs = 2;
+	kopou.ndbs = 0;
+	kopou.can_db_resize = 1;
+	kopou.saver = -1;
+	kopou.saver_status = K_AGAIN;
+	kopou.saver_complete_ts = kopou.current_time;
+	kopou.space = 0;
 
 	settings.cluster_name = kstr_new("kopou-dev");
 	settings.address = kstr_new("0.0.0.0");
@@ -238,21 +148,15 @@ static void init_globals(int bg)
 	settings.cron_interval = 500;
 	settings.http_req_continue_timeout = 5.0;
 	settings.conns_cron_interval = 2.0;
-
-
-	stats.objects = 0;
-	stats.hits = 0;
-	stats.missed = 0;
-	stats.deleted = 0;
-	stats.space = 0;
+	settings.db_resize_interval = 10.0;
+	settings.db_backup_interval = 2.0;
 }
 
 static void kopou_oom_handler(size_t size)
 {
 	_kdie("out of memory, total memory used: %lu bytes"
-		"and fail to alloc:%lu bytes", stats.space, size);
+		"and fail to alloc:%lu bytes", kopou.space, size);
 }
-
 
 static void usages(char *name)
 {
@@ -393,15 +297,41 @@ static int setup_sighandler_asyncworkers(void)
 
 static void db_expand_cron(void)
 {
-	int r, i;
-
-	for (i = 0; i < kopou.ndbs; i++) {
-		r = kdb_try_expand(get_db(i));
-		if (r == K_OK)
-			klog(KOPOU_DEBUG, "resizing db %d", i);
+	int i;
+	if (kopou.can_db_resize) {
+		for (i = 0; i < kopou.ndbs; i++)
+			kdb_try_expand(get_db(i));
 	}
 }
 
+static void db_backup_cron(void)
+{
+	return;
+	kopou_db_t *db;
+	int i, rs;
+
+	if (kopou.saver != -1) {
+		bgs_save_status();
+		return;
+	}
+
+	if (difftime(kopou.current_time, kopou.saver_complete_ts)
+		< settings.db_backup_interval)
+		return;
+
+	rs = 0;
+	for (i = 0; i < kopou.ndbs; i++) {
+		db = get_db(i);
+		if (db->backup_hdd && db->dirty > 0) {
+			db->dirty_considered = db->dirty;
+			if (!rs)
+				rs = 1;
+		}
+	}
+
+	if (rs)
+		bgs_save_async();
+}
 
 static void loop_prepoll_handler(kevent_loop_t *ev)
 {
@@ -409,9 +339,8 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 		kevent_loop_stop(ev);
 
 	kopou.current_time = time(NULL);
-	db_expand_cron();
+	//db_expand_cron();
 
-	/* triger backup if required*/
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
@@ -486,7 +415,6 @@ static void connection_cron(void)
 	kopou.conns_last_cron_ts = kopou.current_time;
 }
 
-
 static void kopou_cron(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(fd);
@@ -502,11 +430,9 @@ static void kopou_cron(int fd, eventtype_t evtype)
 
 	kopou.current_time = time(NULL);
 
+	db_backup_cron();
 	db_expand_cron();
 	connection_cron();
-
-
-	/* triger dbbackup if required*/
 
 }
 
@@ -571,7 +497,6 @@ int main(int argc, char **argv)
 	if (setup_sighandler_asyncworkers() == K_ERR)
 		_kdie("fail to setup signal handlers");
 
-	init_cmds_table();
 	xalloc_set_oom_handler(kopou_oom_handler);
 
 	kopou.tconns = settings.http_max_ccur_conns + KOPOU_OWN_FDS;
