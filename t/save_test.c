@@ -4,19 +4,45 @@
 #include <endian.h>
 #include <errno.h>
 #include <sys/types.h>
+
 #include "../src/kopou.h"
 
 
-void write_db(void)
-{
-	FILE *fp;
-	int r;
+typedef struct {
+	kstr_t content_type;
+	kstr_t key;
+	void *data;
+	size_t size;
+} bucket_obj_t;
 
-	fp = fopen("dbbucket.tmp", "w");
-	if (!fp) {
-		printf("fp fail\n");
-		exit(1);
+
+void writedata(FILE *fp)
+{
+	int i;
+	bucket_obj_t **objs, *obj;
+
+	objs = xmalloc(20 * sizeof(bucket_obj_t*));
+
+	for (i = 0; i < 20; i++) {
+
+		obj = xmalloc(sizeof(bucket_obj_t));
+		obj->content_type = kstr_new("Application/Json");
+		obj->key = kstr_new("realkey");
+		obj->size = 10;
+		obj->data = xmalloc(obj->size);
+		memcpy(obj->data, "sujandutta", 10);
+		objs[i] = obj;
 	}
+
+	for (i = 0; i < 20; i++) {
+		obj = objs[i];
+
+	}
+}
+
+void write_db(FILE *fp)
+{
+	int r;
 
 	r = bgs_write(fp, "kopou", 5);
 	if (r == 0)
@@ -32,25 +58,14 @@ void write_db(void)
 	if (r == 0)
 		printf("error writing kopou db version\n");
 
-	time_t dbf = time(NULL);
-	time_t be = htobe64(dbf);
-	r = bgs_write(fp, &be, sizeof(be));
-	if (r == 0)
-		printf("error writing kopou db time\n");
-
-	char buf[128];
-	size_t len = 128;
-	struct tm *tm = gmtime(&dbf);
-	strftime(buf, len, "Date: %a, %d %b %Y %H:%M:%S %Z\r\n", tm);
-	printf("%s\n", buf);
-
 	int64_t cn = 123456789;
 	cn = htobe64(cn);
 	r = bgs_write(fp, &cn, sizeof(cn));
 	if (r == 0)
 		printf("error writing kopou counts\n");
 
-	fclose(fp);
+	writedata(fp);
+
 }
 
 void read_db(void)
@@ -105,13 +120,51 @@ void read_db(void)
 	cn = be64toh(cn);
 	printf("count %zu\n", cn);
 
-	fclose(fp);
 }
 
 
 int main()
 {
-	write_db();
-	read_db();
+	FILE *fp;
+	int r;
+	uint32_t read;
+
+	fp = fopen("dbbucket.tmp", "w");
+	if (!fp) {
+		printf("fp fail write\n");
+		exit(1);
+	}
+
+
+	bgs_write_length(fp, 0); //64 
+	bgs_write_length(fp, 63); //64 
+	bgs_write_length(fp, 244);
+	bgs_write_length(fp, 16000); //16384
+	bgs_write_length(fp, 4194000); //4194304
+	bgs_write_length(fp, 4300000);
+
+	fclose(fp);
+
+	fp = fopen("dbbucket.tmp", "r");
+	if (!fp) {
+		printf("fp fail write\n");
+		exit(1);
+	}
+
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+	read = bgs_read_length(fp);
+	printf("%u\n", read);
+
+	fclose(fp);
+
 	return 0;
 }
