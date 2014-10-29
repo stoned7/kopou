@@ -26,6 +26,7 @@
 #define K_OK 0
 #define K_ERR -1
 #define K_AGAIN 1
+#define K_LEN_ERR UINT_MAX
 #define K_FORCE_USE(v) ((void)v)
 
 #define KOPOU_VERSION ".09"
@@ -427,6 +428,8 @@ void reply_302(kconnection_t *c); //Found
 /* bgsaver.c */
 int bgs_write(FILE *f, const void *b, size_t len);
 int bgs_read(FILE *f, void *b, size_t len);
+int bgs_write_length(FILE *fp, uint32_t len);
+uint32_t bgs_read_length(FILE *fp);
 void bgs_save_async(void);
 void bgs_save_status(void);
 

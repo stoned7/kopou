@@ -44,6 +44,82 @@ int bgs_read(FILE *f, void *b, size_t len)
 	return 1;
 }
 
+int bgs_write_length(FILE *fp, uint32_t len)
+{
+	unsigned char buf[3];
+	int r;
+
+	if (len < (1 << 6)) {
+		len = htole32(len);
+		buf[0] = (len & 0xff) | (0 << 6);
+		r = bgs_write(fp, buf, 1);
+		if (!r)
+			return K_ERR;
+	} else if (len < (1 << 14)) {
+		len = htole32(len);
+		buf[0] = ((len >> 8) & 0xff) | (1 << 6);
+		buf[1] = len & 0xff;
+		r = bgs_write(fp, buf, 2);
+		if (!r)
+			return K_ERR;
+	} else if (len < (1 << 22)) {
+		len = htole32(len);
+		buf[0] = ((len >> 16) & 0xff) | (2 << 6);
+		buf[1] = (len >> 8) & 0xff;
+		buf[2] = len & 0xff;
+		r = bgs_write(fp, buf, 3);
+		if (!r)
+			return  K_ERR;
+	} else {
+		buf[0] = 3 << 6;
+		r = bgs_write(fp, buf, 1);
+		if (!r)
+			return K_ERR;
+		len = htole32(len);
+		r = bgs_write(fp, &len, 4);
+		if (!r)
+			return K_ERR;
+	}
+	return K_OK;
+}
+
+uint32_t bgs_read_length(FILE *fp)
+{
+	unsigned char buf[3];
+	uint32_t len;
+	int size, r;
+
+	r = bgs_read(fp, buf, 1);
+	if (!r)
+		return K_LEN_ERR;
+
+	size = (buf[0] & 0xc0) >> 6;
+	if (size == 0) {
+		len = buf[0] & 0x3F;
+		return le32toh(len);
+	} else if (size == 1) {
+		r = bgs_read(fp, buf+1, 1);
+		if (!r)
+			return K_LEN_ERR;
+		len = ((buf[0] & 0x3F) << 8)  | buf[1];
+		return le32toh(len);
+	} else if (size == 2) {
+		r = bgs_read(fp, buf+1, 2);
+		if (!r)
+			return K_LEN_ERR;
+		len = (((buf[0] & 0x3F) << 16) | (buf[1] << 8)) | buf[2];
+		return le32toh(len);
+	} else if (size == 3) {
+		r = bgs_read(fp, &len, 4);
+		if (!r)
+			return K_LEN_ERR;
+		return le32toh(len);
+	}
+
+	return K_LEN_ERR;
+}
+
+/*
 void bgs_save_async(void)
 {
 	pid_t saverbaby;
@@ -116,3 +192,5 @@ done:
 	kopou.can_db_resize = 1;
 	klog(KOPOU_DEBUG, "saver completed, pid %d", pid);
 }
+
+*/
