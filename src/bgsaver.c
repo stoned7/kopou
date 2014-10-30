@@ -2,20 +2,20 @@
 
 #define BG_RW_SIZE_MAX 1024
 
-static int _bgs_write(FILE *f, const void *b, size_t len)
+static int _bgs_write(FILE *fp, const void *b, size_t len)
 {
 	int w;
-	w = fwrite(b, len, 1, f);
+	w = fwrite(b, len, 1, fp);
 	return w;
 }
 
-int bgs_write(FILE *f, const void *b, size_t len)
+int bgs_write(FILE *fp, const void *b, size_t len)
 {
 	size_t wlen;
 	while (len) {
 		wlen = len < BG_RW_SIZE_MAX
 			? len : BG_RW_SIZE_MAX;
-		if (_bgs_write(f, b, wlen) == 0)
+		if (_bgs_write(fp, b, wlen) == 0)
 			return 0;
 		len -= wlen;
 		b += wlen;
@@ -23,20 +23,20 @@ int bgs_write(FILE *f, const void *b, size_t len)
 	return 1;
 }
 
-static int _bgs_read(FILE *f, void *b, size_t len)
+static int _bgs_read(FILE *fp, void *b, size_t len)
 {
 	int r;
-	r = fread(b, len, 1, f);
+	r = fread(b, len, 1, fp);
 	return r;
 }
 
-int bgs_read(FILE *f, void *b, size_t len)
+int bgs_read(FILE *fp, void *b, size_t len)
 {
 	size_t rlen;
 	while (len) {
 		rlen = len < BG_RW_SIZE_MAX
 			? len : BG_RW_SIZE_MAX;
-		if (_bgs_read(f, b, rlen) == 0)
+		if (_bgs_read(fp, b, rlen) == 0)
 			return 0;
 		len -= rlen;
 		b += rlen;
@@ -44,7 +44,7 @@ int bgs_read(FILE *f, void *b, size_t len)
 	return 1;
 }
 
-int bgs_write_length(FILE *fp, uint32_t len)
+int bgs_write_len(FILE *fp, uint32_t len)
 {
 	unsigned char buf[3];
 	int r;
@@ -83,7 +83,7 @@ int bgs_write_length(FILE *fp, uint32_t len)
 	return K_OK;
 }
 
-uint32_t bgs_read_length(FILE *fp)
+uint32_t bgs_read_len(FILE *fp)
 {
 	unsigned char buf[3];
 	uint32_t len;
@@ -118,6 +118,7 @@ uint32_t bgs_read_length(FILE *fp)
 
 	return K_LEN_ERR;
 }
+
 
 /*
 void bgs_save_async(void)

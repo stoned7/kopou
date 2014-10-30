@@ -426,10 +426,10 @@ void reply_301(kconnection_t *c); //Move Permanently
 void reply_302(kconnection_t *c); //Found
 
 /* bgsaver.c */
-int bgs_write(FILE *f, const void *b, size_t len);
-int bgs_read(FILE *f, void *b, size_t len);
-int bgs_write_length(FILE *fp, uint32_t len);
-uint32_t bgs_read_length(FILE *fp);
+int bgs_write(FILE *fp, const void *b, size_t len);
+int bgs_read(FILE *fp, void *b, size_t len);
+int bgs_write_len(FILE *fp, uint32_t len);
+uint32_t bgs_read_len(FILE *fp);
 void bgs_save_async(void);
 void bgs_save_status(void);
 
