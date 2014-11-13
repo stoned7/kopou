@@ -13,8 +13,8 @@ kevent_loop_t *kevent_new(int size, onloop_prepoll onprepoll_handler,
 		xfree(el);
 		return NULL;
 	}
-	el->events = xcalloc(size, sizeof(struct epoll_event));
-	el->kevents = xcalloc(size, sizeof(kevent_t));
+	el->events = xmalloc(size * sizeof(struct epoll_event));
+	el->kevents = xmalloc(size * sizeof(kevent_t));
 	el->event_size = size;
 	el->_event_size = 0;
 	el->evcounter = 0;
@@ -67,6 +67,8 @@ static void _process(kevent_loop_t *el, kevent_t *ev)
 static int _poll(kevent_loop_t *el)
 {
 	int nev, i;
+
+
 	nev = epoll_wait(el->epd, el->events, el->event_size,
 						KEVENT_POLL_TIMEOUT);
 	if (nev == KEVENT_ERR) {

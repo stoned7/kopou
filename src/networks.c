@@ -2,7 +2,10 @@
 
 static kconnection_t *http_create_connection(int fd)
 {
-	kconnection_t *c = xmalloc(sizeof(kconnection_t));
+	kconnection_t *c;
+	khttp_request_t *r;
+
+	c = xmalloc(sizeof(kconnection_t));
 
 	c->fd = fd;
 	c->connection_type = CONNECTION_TYPE_HTTP;
@@ -10,9 +13,7 @@ static kconnection_t *http_create_connection(int fd)
 	c->last_interaction_ts = kopou.current_time;
 	c->disconnect_after_reply = 0;
 
-	c->req = xmalloc(sizeof(khttp_request_t));
-	khttp_request_t *r = c->req;
-
+	r = xmalloc(sizeof(khttp_request_t));
 	r->cmd = NULL;
 	r->buf = r->curbuf = NULL;
 
@@ -66,12 +67,14 @@ static kconnection_t *http_create_connection(int fd)
 	r->res->flag = 0;
 	r->res->size_hint = HTTP_RES_HEADERS_SIZE;
 
+	c->req = r;
 	return c;
 }
 
 void http_delete_connection(kconnection_t *c)
 {
 	int i;
+	khttp_request_t *r;
 	kbuffer_t *b, *tb;
 	knamevalue_t *h, *th;
 
@@ -80,7 +83,7 @@ void http_delete_connection(kconnection_t *c)
 	tcp_close(c->fd);
 
 	if (c->req) {
-		khttp_request_t *r = c->req;
+		r = c->req;
 
 		b = r->buf;
 		while (b) {
@@ -99,12 +102,14 @@ void http_delete_connection(kconnection_t *c)
 
 		for (i = 0; i < r->nsplitted_uri; i++)
 			kstr_del(r->splitted_uri[i]);
+		xfree(r->splitted_uri);
 
 		if (r->content_type)
 			kstr_del(r->content_type);
 
 		for (i = 0; i < r->res->nheaders; i++)
 			kstr_del(r->res->headers[i]);
+		xfree(r->res->headers);
 
 		b = r->res->buf;
 		while (b) {
@@ -113,6 +118,7 @@ void http_delete_connection(kconnection_t *c)
 			xfree(b);
 			b = tb;
 		}
+
 		xfree(r->res);
 		xfree(r);
 	}
@@ -127,8 +133,9 @@ static void http_reset_request(kconnection_t *c)
 	int i;
 	kbuffer_t *b, *tb;
 	knamevalue_t *h, *th;
+	khttp_request_t *r;
 
-	khttp_request_t *r = c->req;
+	r = c->req;
 
 	b = r->buf;
 	while (b) {
@@ -149,6 +156,7 @@ static void http_reset_request(kconnection_t *c)
 
 	for (i = 0; i < r->nsplitted_uri; i++)
 		kstr_del(r->splitted_uri[i]);
+	xfree(r->splitted_uri);
 	r->splitted_uri = NULL;
 	r->nsplitted_uri = 0;
 
@@ -194,9 +202,12 @@ static void http_reset_request(kconnection_t *c)
 	r->plus_in_uri = 0;
 	r->space_in_uri = 0;
 
+	for (i = 0; i < r->res->nheaders; i++)
+		kstr_del(r->res->headers[i]);
 	xfree(r->res->headers);
 	r->res->headers = NULL;
 	r->res->nheaders = 0;
+
 	r->res->flag = 0;
 	r->res->size_hint = HTTP_RES_HEADERS_SIZE;
 
@@ -253,6 +264,8 @@ static void http_response_handler(int fd, eventtype_t evtype)
 
 		if (c->disconnect_after_reply) {
 			http_delete_connection(c);
+			size_t al = xalloc_total_mem_used();
+			klog(KOPOU_DEBUG, "after response: %zu", al);
 			return;
 		}
 		kevent_del_event(kopou.loop, fd, KEVENT_WRITABLE);
@@ -260,6 +273,8 @@ static void http_response_handler(int fd, eventtype_t evtype)
 	}
 
 	c->last_interaction_ts = kopou.current_time;
+	size_t al = xalloc_total_mem_used();
+	klog(KOPOU_DEBUG, "after response: %zu", al);
 }
 
 
@@ -440,6 +455,9 @@ static void http_request_handler(int fd, eventtype_t evtype)
 		r->_parsing_state = parsing_done;
 	}
 
+	size_t al = xalloc_total_mem_used();
+	klog(KOPOU_DEBUG, "after request: %zu", al);
+
 	if (r->_parsing_state == parsing_done)
 		execute_command(c);
 }
@@ -473,7 +491,8 @@ void http_accept_new_connection(int fd, eventtype_t evtype)
 		}
 
 		if (kopou.nconns > settings.http_max_ccur_conns) {
-			if (!b) b = create_kbuffer(HTTP_RES_HEADERS_SIZE);
+			if (!b)
+				b = create_kbuffer(HTTP_RES_HEADERS_SIZE);
 			reply_503_now(b);
 			tcp_write(conn, b->start, b->last - b->start, &ta);
 			klog(KOPOU_WARNING, "exceed max concurrent connection limits: %zu",
@@ -502,6 +521,9 @@ void http_accept_new_connection(int fd, eventtype_t evtype)
 
 		kopou.conns[conn] = http_create_connection(conn);
 		kopou.nconns++;
+
+		size_t al = xalloc_total_mem_used();
+		klog(KOPOU_DEBUG, "created connection: %zu", al);
 	}
 
 	if (b) {
@@ -514,6 +536,7 @@ void http_listener_error(int fd, eventtype_t evtype)
 {
 	K_FORCE_USE(fd);
 	K_FORCE_USE(evtype);
+
 	klog(KOPOU_ERR, "http listener err: %s", strerror(errno));
 	kopou.shutdown = 1;
 }

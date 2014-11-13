@@ -200,7 +200,7 @@ static aarray_element_t *kdb_iter_get_next_index(kopou_db_iter_t *it)
 		it->index += 1;
 	}
 
-	if (!it->jumped && !it->db->main->secondary) {
+	if (!it->jumped && it->db->main->secondary) {
 		it->jumped = 1;
 		it->aa = it->db->main->secondary;
 		it->index = 0;

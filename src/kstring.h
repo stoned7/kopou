@@ -22,7 +22,8 @@ int kstr_toupper(kstr_t str);
 
 static inline size_t kstr_len(kstr_t str)
 {
-	return *(size_t*)(str - lsize);
+	//return *(size_t*)(str - lsize);
+	return strlen(str);
 }
 
 #endif

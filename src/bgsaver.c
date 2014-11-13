@@ -120,7 +120,6 @@ uint32_t bgs_read_len(FILE *fp)
 }
 
 
-/*
 void bgs_save_async(void)
 {
 	pid_t saverbaby;
@@ -194,4 +193,3 @@ done:
 	klog(KOPOU_DEBUG, "saver completed, pid %d", pid);
 }
 
-*/

@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <string.h>
+#include <strings.h>
+#include <sys/types.h>
 #include <time.h>
 #include <sys/timerfd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #include <endian.h>
@@ -445,4 +445,5 @@ static inline void get_http_server_str(char *buf, size_t len)
 			KOPOU_VERSION, KOPOU_ARCHITECTURE, VNODE_SIZE);
 }
 
+void bucket_backup_objects_tmp(kopou_db_t *db);
 #endif

@@ -304,11 +304,12 @@ static void db_expand_cron(void)
 	}
 }
 
+
 static void db_backup_cron(void)
 {
-	return;
 	kopou_db_t *db;
 	int i, rs;
+
 
 	if (kopou.saver != -1) {
 		bgs_save_status();
@@ -337,10 +338,7 @@ static void loop_prepoll_handler(kevent_loop_t *ev)
 {
 	if (kopou.shutdown)
 		kevent_loop_stop(ev);
-
 	kopou.current_time = time(NULL);
-	//db_expand_cron();
-
 }
 
 static void loop_error_handler(kevent_loop_t *ev, int eerrno)
@@ -430,7 +428,7 @@ static void kopou_cron(int fd, eventtype_t evtype)
 
 	kopou.current_time = time(NULL);
 
-	db_backup_cron();
+	//db_backup_cron();
 	db_expand_cron();
 	connection_cron();
 
@@ -510,6 +508,9 @@ int main(int argc, char **argv)
 		_kdie("fail to start listener");
 	if (init_kopou_cron() == K_ERR)
 		_kdie("fail to start kopou cron");
+
+	size_t beforereq = xalloc_total_mem_used();
+	klog(KOPOU_DEBUG, "Total Memory Used Before any request %zu", beforereq);
 
 	kevent_loop_start(kopou.loop);
 

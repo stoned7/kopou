@@ -1,6 +1,13 @@
 #include "xalloc.h"
+#include <malloc.h>
 
+static size_t total_mem_used;
 static void (*xalloc_oom_handler)(size_t);
+
+size_t xalloc_total_mem_used(void)
+{
+	return total_mem_used;
+}
 
 void xalloc_set_oom_handler(void (*oom_handler)(size_t))
 {
@@ -9,43 +16,68 @@ void xalloc_set_oom_handler(void (*oom_handler)(size_t))
 
 void *xmalloc(size_t size)
 {
-	void *p;
+	void *ptr;
+	size_t actual_size;
 
-	p = malloc(size);
-	if (!p)
+	if (size <= 0)
+		return NULL;
+
+	ptr = malloc(size);
+	if (ptr == NULL)
 		xalloc_oom_handler(size);
-
-	return p;
+	actual_size = malloc_usable_size(ptr);
+	total_mem_used += actual_size;
+	return ptr;
 }
 
 
 void *xcalloc(size_t nmemb, size_t size)
 {
-	void *p;
+	void *ptr;
+	size_t actual_size;
 
-	p = calloc(nmemb, size);
-	if (!p)
+	if (size <= 0)
+		return NULL;
+
+	ptr = calloc(nmemb, size);
+	if (ptr == NULL)
+		xalloc_oom_handler(nmemb * size);
+
+	actual_size = malloc_usable_size(ptr);
+	total_mem_used += actual_size;
+	return ptr;
+}
+
+void *xrealloc(void *ptr, size_t size)
+{
+	size_t old_size, new_size;
+	void *new_ptr;
+
+	if (size <= 0)
+		return NULL;
+
+	old_size = malloc_usable_size(ptr);
+	new_ptr = realloc(ptr, size);
+
+	if (new_ptr == NULL)
 		xalloc_oom_handler(size);
 
-	return p;
+	total_mem_used -= old_size;
+	new_size = malloc_usable_size(new_ptr);
+	total_mem_used += new_size;
+	return new_ptr;
 }
 
-void *xrealloc(void *p, size_t size)
+void xfree(void *ptr)
 {
-	void *np;
+	size_t size;
 
-	if (!p)
-		return xmalloc(size);
+	if (ptr == NULL)
+		return;
 
-	np = realloc(p, size);
-	if (!np)
-		xalloc_oom_handler(size);
-
-	return np;
+	size = malloc_usable_size(ptr);
+	free(ptr);
+	total_mem_used -= size;
+	ptr = NULL;
 }
 
-void xfree(void *p)
-{
-	free(p);
-	p = NULL;
-}

@@ -16,24 +16,69 @@ typedef struct {
 
 char stats_format[] = "{\"objects\":%zu, \"bytes\":%zu, \"missed\":%zu, \"hits\":%zu, \"deleted\":%zu}";
 
+void bucket_backup_objects_tmp(kopou_db_t *db)
+{
+	kopou_db_iter_t *iter;
+	kstr_t key;
+	bucket_obj_t *o;
+	size_t klen, clen;
+
+	iter = kdb_iter_new(db);
+
+	while (kdb_iter_foreach(iter, &key, (void**)&o)) {
+
+		klen = kstr_len(key);
+		clen = kstr_len(o->content_type);
+		printf("%s --- %s --- %zu [%s]\n", key, o->content_type, o->size,(char*)o->data);
+	}
+
+	kdb_iter_del(iter);
+}
+
+
 int bucket_backup_objects(FILE *fp, kopou_db_t *db)
 {
 	kopou_db_iter_t *iter;
 	kstr_t key;
-	bucket_obj_t *obj;
+	bucket_obj_t *o;
+	int r;
+	size_t klen, clen;
 
 	iter = kdb_iter_new(db);
 
-	while (kdb_iter_foreach(iter, &key, (void**)&obj)) {
+	while (kdb_iter_foreach(iter, &key, (void**)&o)) {
 
+		klen = kstr_len(key);
+		r = bgs_write_len(fp, klen);
+		if (r == K_ERR)
+			goto err;
+		r = bgs_write(fp, key, klen);
+		if (!r)
+			goto err;
+
+		clen = kstr_len(o->content_type);
+		r = bgs_write_len(fp, clen);
+		if (r == K_ERR)
+			goto err;
+		r = bgs_write(fp, o->content_type, clen);
+		if (!r)
+			goto err;
+
+		r = bgs_write_len(fp, o->size);
+		if (r == K_ERR)
+			goto err;
+		r = bgs_write(fp, o->data, o->size);
+		if (!r)
+			goto err;
 	}
 
 	kdb_iter_del(iter);
 	return K_OK;
+err:
+	kdb_iter_del(iter);
+	return K_ERR;
 }
 
-
-/* this routine run async, care about cow */
 static int bucket_backup_hdd(kopou_db_t *db)
 {
 	FILE *fp;
@@ -67,6 +112,13 @@ static int bucket_backup_hdd(kopou_db_t *db)
 	if  (r == 0)
 		return K_ERR;
 
+	r = bucket_backup_objects(fp, db);
+	if (r == K_ERR) {
+		fclose(fp);
+		return K_ERR;
+	}
+
+	/* TODO move the file and flush it*/
 	fclose(fp);
 	return K_OK;
 }
@@ -117,16 +169,14 @@ static int bucket_put_cmd(kconnection_t *c)
 
 	bucketdb = get_db(r->cmd->db_id);
 
-	if (kdb_exist(bucketdb, k)) {
-		re = kdb_upd(bucketdb, k, o, (void**)&oo);
-		if (re == K_OK) {
-			kopou.space -= oo->size;
-			bucketdb->stats->space -= oo->size;
+	re = kdb_upd(bucketdb, k, o, (void**)&oo);
+	if (re == K_OK) {
+		kopou.space -= oo->size;
+		bucketdb->stats->space -= oo->size;
 
-			kstr_del(oo->content_type);
-			xfree(oo->data);
-			xfree(oo);
-		}
+		kstr_del(oo->content_type);
+		xfree(oo->data);
+		xfree(oo);
 
 		bucketdb->dirty++;
 		bucketdb->stats->space += o->size;
@@ -196,7 +246,7 @@ static int bucket_get_cmd(kconnection_t *c)
 	snprintf(cl, 64, HTTP_H_CONTENTLENGTH_FMT, o->size);
 	snprintf(ct, 128, HTTP_H_CONTENTTYPE_FMT, o->content_type);
 
-	r->res->headers = xcalloc(2, sizeof(kstr_t));
+	r->res->headers = xmalloc(2 * sizeof(kstr_t));
 	r->res->headers[0] = kstr_new(ct);
 	r->res->headers[1] = kstr_new(cl);
 	r->res->nheaders = 2;
@@ -260,7 +310,7 @@ static int bucket_stats_get_cmd(kconnection_t *c)
 	r->res->size_hint += len;
 
 	snprintf(cl, 128, HTTP_H_CONTENTLENGTH_FMT, len);
-	r->res->headers = xcalloc(2, sizeof(kstr_t));
+	r->res->headers = xmalloc(2 * sizeof(kstr_t));
 	r->res->headers[0] = kstr_new(HTTP_H_CONTENTTYPE_JSON);
 	r->res->headers[1] = kstr_new(cl);
 	r->res->nheaders = 2;
@@ -275,20 +325,11 @@ static int bucket_stats_get_cmd(kconnection_t *c)
 	return K_OK;
 }
 
-static int favicon_get_cmd(kconnection_t *c)
-{
-	khttp_request_t *r = c->req;
-	r->res->flag |= HTTP_RES_CACHABLE;
-	reply_200(c);
-	return K_OK;
-}
-
 void bucket_init_cmds_table(int db_id)
 {
 	unsigned nt, p;
-	kstr_t bucket_name, stats_name, favicon_name;
+	kstr_t bucket_name;
 	kcommand_t *headbucket, *getbucket, *putbucket, *delbucket, *statsbucket;
-	kcommand_t *favicon;
 
 	/* bucket */
 	bucket_name = kstr_new("bucket");
@@ -336,8 +377,7 @@ void bucket_init_cmds_table(int db_id)
 	delbucket->params = xcalloc(p, sizeof(kstr_t));
 	putbucket->next = delbucket;
 
-	stats_name = kstr_new("stats");
-	nt = 2;
+	nt = 3;
 	p = 0;
 	statsbucket = xmalloc(sizeof(kcommand_t));
 	*statsbucket = (kcommand_t){ .method = HTTP_METHOD_GET, .next = NULL,
@@ -347,22 +387,9 @@ void bucket_init_cmds_table(int db_id)
 			KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST };
 	statsbucket->ptemplate = xcalloc(nt, sizeof(kstr_t));
 	statsbucket->ptemplate[0] = bucket_name;
-	statsbucket->ptemplate[1] = stats_name;
+	statsbucket->ptemplate[1] = kstr_new("db");
+	statsbucket->ptemplate[2] = kstr_new("stats");
 	delbucket->next = statsbucket;
 
 	map_add(cmds_table, bucket_name, headbucket);
-
-	/* favicon */
-	favicon_name = kstr_new("favicon.ico");
-	nt = 1;
-	p = 0;
-	favicon = xmalloc(sizeof(kcommand_t));
-	*favicon = (kcommand_t){ .method = HTTP_METHOD_GET, .nparams = p,
-		.db_id = -1, .execute = favicon_get_cmd, .next = NULL,
-		.nptemplate = nt,
-		.flag = KCMD_READ_ONLY | KCMD_SKIP_REQUEST_BODY |
-		KCMD_SKIP_REPLICA | KCMD_SKIP_PERSIST | KCMD_RESPONSE_CACHABLE };
-	favicon->ptemplate = xcalloc(nt, sizeof(kstr_t));
-	favicon->ptemplate[0] = favicon_name;
-	map_add(cmds_table, favicon_name, favicon);
 }

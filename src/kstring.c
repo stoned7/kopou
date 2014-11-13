@@ -6,11 +6,15 @@
 
 kstr_t _kstr_create(char *str, size_t len)
 {
-	kstr_t kstr = xmalloc(lsize + len + 1);
-	memcpy(kstr, &len, lsize);
-	memcpy(kstr + lsize, str, len);
-	kstr[lsize + len] = KSTR_EOS;
-	return kstr + lsize;
+	kstr_t kstr = xmalloc(len + 1);
+	//kstr_t kstr = xmalloc(lsize + len + 1);
+	//memcpy(kstr, &len, lsize);
+	//memcpy(kstr + lsize, str, len);
+	memcpy(kstr, str, len);
+	//kstr[lsize + len] = KSTR_EOS;
+	kstr[len] = KSTR_EOS;
+	//return kstr + lsize;
+	return kstr;
 }
 
 kstr_t kstr_new(char *str)
@@ -25,7 +29,8 @@ kstr_t kstr_empty_new()
 
 void kstr_del(kstr_t str)
 {
-	xfree(str - lsize);
+	xfree(str);
+	//xfree(str - lsize);
 }
 
 kstr_t kstr_dup(kstr_t str)
@@ -81,6 +86,7 @@ err:
 
 kstr_t kstr_ncat_str(kstr_t kstr, const char *str, size_t len)
 {
+	/*
 	size_t clen = kstr_len(kstr);
 	size_t nlen = clen + len;
 	kstr = kstr - lsize;
@@ -89,6 +95,15 @@ kstr_t kstr_ncat_str(kstr_t kstr, const char *str, size_t len)
 	memcpy(kstr + lsize + clen, str, len);
 	kstr[lsize + nlen] = KSTR_EOS;
 	return kstr + lsize;
+	*/
+
+	size_t clen = kstr_len(kstr);
+	size_t nlen = clen + len;
+	kstr = xrealloc(kstr, nlen + 1);
+	memcpy(kstr + clen, str, len);
+	kstr[nlen] = KSTR_EOS;
+	return kstr;
+
 }
 
 
